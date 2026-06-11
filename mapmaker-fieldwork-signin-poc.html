@@ -158,6 +158,7 @@
     .configure-side .subtitle { margin-bottom: 12px; font-size: 13px; }
     .configure-side .config-section { margin-bottom: 14px; }
     .configure-side .config-section h3 { margin-bottom: 8px; }
+    .configure-side .style-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
     .configure-side .style-option { padding: 8px 4px; }
     .configure-side .style-option-icon { font-size: 18px; margin-bottom: 2px; }
     .configure-side .style-option-name { font-size: 10.5px; }
@@ -646,6 +647,8 @@
       requires: { minCategorical: 1 }, fields: ["color", "label"] },
     { id: "graduated", name: "Map by size", icon: "📏", hint: "e.g. height of a tree, traffic counts, noise in Db, etc.",
       requires: { minNumeric: 1 }, fields: ["size", "label"] },
+    { id: "numeric_color_size", name: "Map by color & size", icon: "💠", hint: "two numbers together — e.g. tree trunk width as colour, height as size; earthquake depth & magnitude",
+      requires: { minNumeric: 2 }, fields: ["color", "size", "label"] },
     { id: "categorical_size", name: "Map by type & size", icon: "🎨", hint: "e.g. tree height as size, species as colour",
       requires: { minCategorical: 1, minNumeric: 1 }, fields: ["color", "size", "label"] },
     { id: "pie_chart", name: "Pie charts", icon: "🥧", hint: "e.g. litter surveys, plant species in a quadrat, traffic counts",
@@ -1398,8 +1401,14 @@ Eucalyptus,85,-117.1610,32.7114`;
 
   function pickAutoFields(style, numeric, categorical) {
     const choices = { color: null, size: null, label: null };
-    if (style.fields.includes("color")) choices.color = categorical[0] || null;
-    if (style.fields.includes("size"))  choices.size  = numeric[0] || null;
+    if (style.id === "numeric_color_size") {
+      // Two-numbers style: colour from the first numeric, size from the second
+      choices.color = numeric[0] || null;
+      choices.size  = numeric[1] || numeric[0] || null;
+    } else {
+      if (style.fields.includes("color")) choices.color = categorical[0] || null;
+      if (style.fields.includes("size"))  choices.size  = numeric[0] || null;
+    }
     // Label: prefer a text column, but fall back to a numeric one so a
     // numeric-only file still gets a sensible default label.
     if (style.fields.includes("label")) choices.label = categorical[0] || numeric[0] || null;
@@ -1591,6 +1600,13 @@ Eucalyptus,85,-117.1610,32.7114`;
     switch (style.id) {
       case "pie_chart":
         return buildPieChartRenderer(numeric, features);
+      case "numeric_color_size": {
+        // Two numerics: class-breaks colour ramp on one, size ramp on the other
+        const r = buildClassBreaksRenderer(choices.color, features);
+        const sv = buildSizeVariable(choices.size, features);
+        if (sv) r.visualVariables = [sv];
+        return r;
+      }
       case "categorical_size": {
         const r = buildColorRenderer(choices.color);
         const sv = buildSizeVariable(choices.size, features);
@@ -1614,6 +1630,7 @@ Eucalyptus,85,-117.1610,32.7114`;
   function buildPopupTitle(style, choices) {
     switch (style.id) {
       case "pie_chart":         return "Composition breakdown";
+      case "numeric_color_size":
       case "categorical_size":  return `{${choices.color}} – {${choices.size}}`;
       case "categorical":       return `{${choices.color}}`;
       case "graduated":         return `{${choices.size}}`;
@@ -2265,16 +2282,21 @@ Eucalyptus,85,-117.1610,32.7114`;
       //  source "categorical" -> categorical columns only
       //  source "color"       -> BOTH: categorical (unique-value) and numeric (graduated colour)
       //  source "label"       -> BOTH: any column can be shown as a text label
+      // Exception: the Color & size style maps two NUMBERS, so its colour
+      // field is numeric-only regardless of the default source.
+      let effectiveSource = fieldDef.source;
+      if (state.style.id === "numeric_color_size" && fieldKey === "color") effectiveSource = "numeric";
+
       let sourceList, optionsHtml, emptyHint;
-      if (fieldDef.source === "numeric") {
+      if (effectiveSource === "numeric") {
         sourceList = state.numeric;
         emptyHint = "no numeric columns in your data";
         optionsHtml = sourceList.map(o => `<option value="${o}">${o.replace(/_/g, " ")}</option>`).join("");
-      } else if (fieldDef.source === "categorical") {
+      } else if (effectiveSource === "categorical") {
         sourceList = state.categorical;
         emptyHint = "no text columns in your data";
         optionsHtml = sourceList.map(o => `<option value="${o}">${o.replace(/_/g, " ")}</option>`).join("");
-      } else if (fieldDef.source === "label") {
+      } else if (effectiveSource === "label") {
         // both — any column can be a label; no "colour scale" wording here
         sourceList = state.categorical.concat(state.numeric);
         emptyHint = "no columns available to label by";
@@ -2335,6 +2357,9 @@ Eucalyptus,85,-117.1610,32.7114`;
     switch (state.style.id) {
       case "pie_chart":
         summary = `Each point will show a pie chart of ${state.numeric.length} numeric columns, sized by total.`;
+        break;
+      case "numeric_color_size":
+        summary = `Each point shaded by ${c.color || "—"}, sized by ${c.size || "—"}.`;
         break;
       case "categorical_size":
         summary = `Each point ${colorPhrase || "colored by —"}, sized by ${c.size || "—"}.`;
