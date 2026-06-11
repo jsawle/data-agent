@@ -150,27 +150,34 @@
     .configure-side {
       flex: 0 0 400px; max-width: 400px;
       border-left: 1px solid var(--hairline);
-      padding: 18px 24px;
-      overflow-y: auto;            /* safety net only — content is sized to fit */
+      background: #fff;
+      display: flex; flex-direction: column;
+      min-height: 0;
+    }
+    .side-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 20px 8px; }
+    .side-actions {
+      flex: 0 0 auto;
+      padding: 12px 20px;
+      border-top: 1px solid var(--hairline);
       background: #fff;
     }
-    .configure-side h2 { font-size: 16px; }
-    .configure-side .subtitle { margin-bottom: 12px; font-size: 13px; }
-    .configure-side .config-section { margin-bottom: 14px; }
-    .configure-side .config-section h3 { margin-bottom: 8px; }
+    .configure-side h2 { font-size: 15px; }
+    .configure-side .subtitle { margin-bottom: 10px; font-size: 12.5px; }
+    .configure-side .config-section { margin-bottom: 10px; }
+    .configure-side .config-section h3 { margin-bottom: 6px; }
     .configure-side .style-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-    .configure-side .style-option { padding: 8px 4px; }
-    .configure-side .style-option-icon { font-size: 18px; margin-bottom: 2px; }
+    .configure-side .style-option { padding: 6px 3px; }
+    .configure-side .style-option-icon { font-size: 16px; margin-bottom: 2px; }
     .configure-side .style-option-name { font-size: 10.5px; }
-    .configure-side .style-description { font-size: 12px; padding: 6px 10px; margin-bottom: 8px; }
+    .configure-side .style-description { font-size: 11.5px; padding: 5px 9px; margin-bottom: 6px; }
     /* stack label above select so the 400px panel breathes */
-    .configure-side .config-row { display: block; padding: 7px 0; }
-    .configure-side .config-label { display: block; margin-bottom: 4px; font-size: 13px; }
-    .configure-side .config-select { width: 100%; }
-    .configure-side .config-summary { margin-top: 6px; font-size: 12px; padding: 10px; }
-    .configure-side #publishBtn { width: 100%; }
+    .configure-side .config-row { display: block; padding: 5px 0; }
+    .configure-side .config-label { display: block; margin-bottom: 3px; font-size: 12.5px; }
+    .configure-side .config-select { width: 100%; padding: 7px 10px; }
+    .configure-side .config-summary { margin-top: 4px; font-size: 11.5px; padding: 8px 10px; }
+    .configure-side #publishBtn { width: 100%; padding: 12px 24px; }
     .configure-side .btn-row .btn-secondary { flex: 1; }
-    .map-preview-note { font-size: 11px; color: var(--ink-muted); margin-top: 10px; }
+    .map-preview-note { font-size: 10.5px; color: var(--ink-muted); margin-top: 8px; }
 
     /* ---- Point symbol controls ---- */
     .symbol-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
@@ -471,48 +478,52 @@
 
   <!-- STAGE 2: Tools sidebar (shows once data is loaded) -->
   <aside id="stage-configure" class="configure-side hidden">
-    <h2>Looks good. Here's how we'll map it.</h2>
-    <p class="subtitle" id="configureSubtitle"></p>
+    <div class="side-scroll">
+      <h2>Looks good. Here's how we'll map it.</h2>
+      <p class="subtitle" id="configureSubtitle"></p>
 
-    <div class="config-section">
-      <h3>Map style</h3>
-      <div class="style-options" id="styleOptions"></div>
-      <div class="style-description" id="styleDescription"></div>
-    </div>
-
-    <div class="config-section" id="fieldsSection">
-      <h3>Fields</h3>
-      <div id="fieldsContainer"></div>
-    </div>
-
-    <div class="config-section" id="symbolSection">
-      <h3>Points</h3>
-      <div class="symbol-row" id="shapeRow">
-        <span class="symbol-label">Shape</span>
-        <div class="shape-options" id="shapeOptions"></div>
+      <div class="config-section">
+        <h3>Map style</h3>
+        <div class="style-options" id="styleOptions"></div>
+        <div class="style-description" id="styleDescription"></div>
       </div>
-      <div class="symbol-row" id="colorRow">
-        <span class="symbol-label">Color</span>
-        <div class="swatches" id="colorSwatches"></div>
+
+      <div class="config-section" id="fieldsSection">
+        <h3>Fields</h3>
+        <div id="fieldsContainer"></div>
       </div>
-      <div class="symbol-row">
-        <span class="symbol-label">Size</span>
-        <input type="range" id="sizeSlider" min="6" max="28" step="1" value="12">
-        <span id="sizeValue">12 px</span>
+
+      <div class="config-section" id="symbolSection">
+        <h3>Points</h3>
+        <div class="symbol-row" id="shapeRow">
+          <span class="symbol-label">Shape</span>
+          <div class="shape-options" id="shapeOptions"></div>
+        </div>
+        <div class="symbol-row" id="colorRow">
+          <span class="symbol-label">Color</span>
+          <div class="swatches" id="colorSwatches"></div>
+        </div>
+        <div class="symbol-row">
+          <span class="symbol-label">Size</span>
+          <input type="range" id="sizeSlider" min="6" max="28" step="1" value="12">
+          <span id="sizeValue">12 px</span>
+        </div>
       </div>
+
+      <div class="config-summary" id="configSummary"></div>
     </div>
 
-    <div class="config-summary" id="configSummary"></div>
-
-    <div class="btn-row" style="margin-top: 14px;">
-      <button id="publishBtn" class="btn btn-large">Send to MapMaker</button>
+    <!-- Pinned: never scrolls off-screen -->
+    <div class="side-actions">
+      <div class="btn-row">
+        <button id="publishBtn" class="btn btn-large">Send to MapMaker</button>
+      </div>
+      <div class="btn-row" style="margin-top: 8px;">
+        <button id="downloadJsonBtn" class="btn btn-secondary">Download web map JSON</button>
+        <button id="restartBtn" class="btn btn-secondary">Start over</button>
+      </div>
+      <div class="map-preview-note" id="mapPreviewNote"></div>
     </div>
-    <div class="btn-row" style="margin-top: 10px;">
-      <button id="downloadJsonBtn" class="btn btn-secondary">Download web map JSON</button>
-      <button id="restartBtn" class="btn btn-secondary">Start over</button>
-    </div>
-
-    <div class="map-preview-note" id="mapPreviewNote"></div>
   </aside>
 
 </div>
@@ -647,7 +658,7 @@
       requires: { minCategorical: 1 }, fields: ["color", "label"] },
     { id: "graduated", name: "Map by size", icon: "📏", hint: "e.g. height of a tree, traffic counts, noise in Db, etc.",
       requires: { minNumeric: 1 }, fields: ["size", "label"] },
-    { id: "numeric_color_size", name: "Map by color & size", icon: "💠", hint: "two numbers together — e.g. tree trunk width as colour, height as size; earthquake depth & magnitude",
+    { id: "numeric_color_size", name: "Map by color & size", icon: "💠", hint: "two numbers together — e.g. earthquake depth as colour, magnitude as size",
       requires: { minNumeric: 2 }, fields: ["color", "size", "label"] },
     { id: "categorical_size", name: "Map by type & size", icon: "🎨", hint: "e.g. tree height as size, species as colour",
       requires: { minCategorical: 1, minNumeric: 1 }, fields: ["color", "size", "label"] },
@@ -1486,7 +1497,7 @@ Eucalyptus,85,-117.1610,32.7114`;
   }
 
   // Sequential colour ramp for continuous numeric data (light -> dark).
-  // Used by buildClassBreaksRenderer when colouring by a number like depth.
+  // Used by buildNumericColorRenderer when colouring by a number like depth.
   // Esri blue family: the 4 supplied swatch colours plus the lightest blue
   // (E6F1FB) prepended, giving a clean 5-step light-to-dark progression.
   const SEQUENTIAL_RAMP = [
@@ -1497,55 +1508,47 @@ Eucalyptus,85,-117.1610,32.7114`;
     [  0,  97, 155, 255]    // #00619B  supplied darkest
   ];
 
-  // Colour a continuous numeric column by binning it into classes.
-  // Uses equal-interval breaks across the data range — simple, predictable,
-  // and good enough for fieldwork data. 5 classes by default.
-  function buildClassBreaksRenderer(field, features, numClasses) {
-    const n = numClasses || 5;
+  // Colour a continuous numeric column with a CONTINUOUS ramp (colorInfo
+  // visual variable) — the same approach as Map Viewer's "Counts and Amounts
+  // (color)". Stops are centred on the bulk of the data (mean ± 1 SD, clamped
+  // to the actual min/max) so skewed data — e.g. earthquake depth, where most
+  // values are shallow — still shows a full light-to-dark gradient instead of
+  // collapsing into one near-white class. Values beyond the stops clamp to
+  // the end colours.
+  function buildNumericColorRenderer(field, features) {
     const values = features
       .map(f => f.attributes[field])
       .filter(v => v !== null && v !== undefined && v !== "" && !isNaN(v))
       .map(Number);
     if (values.length === 0) {
-      // nothing usable — fall back to a plain symbol
       return { type: "simple", symbol: buildSimpleSymbol() };
     }
     const min = Math.min(...values);
     const max = Math.max(...values);
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const sd = Math.sqrt(values.reduce((a, v) => a + (v - mean) * (v - mean), 0) / values.length);
 
-    // Degenerate case: every value the same. One class, one colour.
-    if (min === max) {
-      return {
-        type: "classBreaks",
-        field,
-        minValue: min,
-        classBreakInfos: [{
-          classMinValue: min,
-          classMaxValue: max,
-          label: String(min),
-          symbol: buildSimpleSymbol(SEQUENTIAL_RAMP[SEQUENTIAL_RAMP.length - 1])
-        }]
-      };
-    }
+    let lo = Math.max(min, mean - sd);
+    let hi = Math.min(max, mean + sd);
+    if (lo >= hi) { lo = min; hi = max; }     // tiny/uniform spread: full range
+    if (lo >= hi) { hi = lo + 1; }            // every value identical
 
-    const span = (max - min) / n;
-    const round = (x) => Math.round(x * 100) / 100;
-    const classBreakInfos = [];
-    for (let i = 0; i < n; i++) {
-      const lo = min + span * i;
-      const hi = (i === n - 1) ? max : min + span * (i + 1);
-      classBreakInfos.push({
-        classMinValue: lo,
-        classMaxValue: hi,
-        label: `${round(lo)} – ${round(hi)}`,
-        symbol: buildSimpleSymbol(SEQUENTIAL_RAMP[i % SEQUENTIAL_RAMP.length])
-      });
-    }
+    const n = SEQUENTIAL_RAMP.length;
+    const round2 = (x) => Math.round(x * 100) / 100;
+    const stops = SEQUENTIAL_RAMP.map((c, i) => ({
+      value: round2(lo + (hi - lo) * i / (n - 1)),
+      color: [c[0], c[1], c[2], POINT_FILL_ALPHA],
+      label: i === 0 ? "< " + round2(lo) : (i === n - 1 ? "> " + round2(hi) : "")
+    }));
+
     return {
-      type: "classBreaks",
-      field,
-      minValue: min,
-      classBreakInfos
+      type: "simple",
+      symbol: buildSimpleSymbol(),   // shape/size/outline kept; fill driven by the ramp
+      visualVariables: [{
+        type: "colorInfo",
+        field: field,
+        stops: stops
+      }]
     };
   }
 
@@ -1594,23 +1597,25 @@ Eucalyptus,85,-117.1610,32.7114`;
     const colorIsNumeric = choices.color && numeric.includes(choices.color);
     const buildColorRenderer = (field) =>
       colorIsNumeric
-        ? buildClassBreaksRenderer(field, features)
+        ? buildNumericColorRenderer(field, features)
         : buildUniqueRenderer(field, features);
 
     switch (style.id) {
       case "pie_chart":
         return buildPieChartRenderer(numeric, features);
       case "numeric_color_size": {
-        // Two numerics: class-breaks colour ramp on one, size ramp on the other
-        const r = buildClassBreaksRenderer(choices.color, features);
+        // Two numerics: continuous colour ramp on one, size ramp on the other
+        const r = buildNumericColorRenderer(choices.color, features);
         const sv = buildSizeVariable(choices.size, features);
-        if (sv) r.visualVariables = [sv];
+        if (sv) r.visualVariables = (r.visualVariables || []).concat([sv]);
         return r;
       }
       case "categorical_size": {
         const r = buildColorRenderer(choices.color);
         const sv = buildSizeVariable(choices.size, features);
-        if (sv) r.visualVariables = [sv];
+        // concat, not assign — a numeric colour choice already carries a
+        // colorInfo visual variable that must survive
+        if (sv) r.visualVariables = (r.visualVariables || []).concat([sv]);
         return r;
       }
       case "categorical":
