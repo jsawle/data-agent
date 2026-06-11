@@ -121,14 +121,52 @@
       color: #888; margin-bottom: 12px;
     }
 
-    /* ---- Live map preview ---- */
-    .map-preview-wrap { margin-bottom: 24px; }
-    #mapPreview {
-      width: 100%; height: 380px;
-      border: 1px solid var(--hairline); border-radius: 8px;
-      overflow: hidden; background: #eef2f5;
+    /* ---- Full-screen configure layout: map fills the page, tools on the right ---- */
+    body.fullmap { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+    body.fullmap .header { padding: 10px 24px; border-bottom-width: 3px; flex: 0 0 auto; }
+    body.fullmap .header-title { font-size: 20px; }
+    body.fullmap .header-sub { font-size: 12px; }
+    body.fullmap .container { max-width: none; width: 100%; margin: 0; padding: 0; flex: 1 1 auto; min-height: 0; display: flex; }
+    /* keep the diagnostic log reachable as a floating chip over the map */
+    body.fullmap .log-toggle {
+      position: fixed; bottom: 8px; left: 8px; z-index: 60;
+      background: rgba(255,255,255,0.95); border: 1px solid var(--hairline);
+      border-radius: 6px; padding: 4px 10px; margin: 0;
     }
-    .map-preview-note { font-size: 12px; color: var(--ink-muted); margin-top: 6px; }
+    body.fullmap .log { width: min(560px, 80vw); max-height: 180px; }
+
+    #stage-configure { display: flex; width: 100%; height: 100%; background: #fff; }
+    .configure-map { flex: 1 1 auto; min-width: 0; position: relative; background: #eef2f5; }
+    #mapPreview { width: 100%; height: 100%; }
+    .configure-side {
+      flex: 0 0 400px; max-width: 400px;
+      border-left: 1px solid var(--hairline);
+      padding: 18px 24px;
+      overflow-y: auto;            /* safety net only — content is sized to fit */
+      background: #fff;
+    }
+    .configure-side h2 { font-size: 16px; }
+    .configure-side .subtitle { margin-bottom: 12px; font-size: 13px; }
+    .configure-side .config-section { margin-bottom: 14px; }
+    .configure-side .config-section h3 { margin-bottom: 8px; }
+    .configure-side .style-option { padding: 8px 4px; }
+    .configure-side .style-option-icon { font-size: 18px; margin-bottom: 2px; }
+    .configure-side .style-option-name { font-size: 10.5px; }
+    .configure-side .style-description { font-size: 12px; padding: 6px 10px; margin-bottom: 8px; }
+    /* stack label above select so the 400px panel breathes */
+    .configure-side .config-row { display: block; padding: 7px 0; }
+    .configure-side .config-label { display: block; margin-bottom: 4px; font-size: 13px; }
+    .configure-side .config-select { width: 100%; }
+    .configure-side .config-summary { margin-top: 6px; font-size: 12px; padding: 10px; }
+    .configure-side #publishBtn { width: 100%; }
+    .configure-side .btn-row .btn-secondary { flex: 1; }
+    .map-preview-note { font-size: 11px; color: var(--ink-muted); margin-top: 10px; }
+
+    @media (max-width: 900px) {
+      #stage-configure { flex-direction: column; }
+      .configure-map { flex: 0 0 45vh; }
+      .configure-side { flex: 1 1 auto; max-width: none; border-left: none; border-top: 1px solid var(--hairline); }
+    }
 
     /* ---- Map-style selector: single non-wrapping row of compact tiles ---- */
     .style-options {
@@ -341,34 +379,38 @@
     </div>
   </div>
 
-  <!-- STAGE 2: Configure + live preview -->
-  <div id="stage-configure" class="card hidden">
-    <h2>Looks good. Here's how we'll map it.</h2>
-    <p class="subtitle" id="configureSubtitle"></p>
-
-    <div class="map-preview-wrap">
+  <!-- STAGE 2: Full-screen map + tools sidebar -->
+  <div id="stage-configure" class="hidden">
+    <div class="configure-map">
       <div id="mapPreview"></div>
+    </div>
+    <aside class="configure-side">
+      <h2>Looks good. Here's how we'll map it.</h2>
+      <p class="subtitle" id="configureSubtitle"></p>
+
+      <div class="config-section">
+        <h3>Map style</h3>
+        <div class="style-options" id="styleOptions"></div>
+        <div class="style-description" id="styleDescription"></div>
+      </div>
+
+      <div class="config-section" id="fieldsSection">
+        <h3>Fields</h3>
+        <div id="fieldsContainer"></div>
+      </div>
+
+      <div class="config-summary" id="configSummary"></div>
+
+      <div class="btn-row" style="margin-top: 14px;">
+        <button id="publishBtn" class="btn btn-large">Send to MapMaker</button>
+      </div>
+      <div class="btn-row" style="margin-top: 10px;">
+        <button id="downloadJsonBtn" class="btn btn-secondary">Download web map JSON</button>
+        <button id="restartBtn" class="btn btn-secondary">Start over</button>
+      </div>
+
       <div class="map-preview-note" id="mapPreviewNote">Loading preview…</div>
-    </div>
-
-    <div class="config-section">
-      <h3>Map style</h3>
-      <div class="style-options" id="styleOptions"></div>
-      <div class="style-description" id="styleDescription"></div>
-    </div>
-
-    <div class="config-section" id="fieldsSection">
-      <h3>Fields</h3>
-      <div id="fieldsContainer"></div>
-    </div>
-
-    <div class="config-summary" id="configSummary"></div>
-
-    <div class="btn-row" style="margin-top: 24px;">
-      <button id="publishBtn" class="btn btn-large">Send to MapMaker</button>
-      <button id="downloadJsonBtn" class="btn btn-secondary">Download web map JSON</button>
-      <button id="restartBtn" class="btn btn-secondary">Start over</button>
-    </div>
+    </aside>
   </div>
 
   <!-- STAGE 2A: File too large -->
@@ -460,6 +502,12 @@
 
   // The production MapMaker Atlas instant app — the result card links here.
   const MAPMAKER_URL = "https://www.arcgis.com/apps/instant/atlas/index.html?appid=0cd1cdee853c413a84bfe4b9a6931f0d";
+
+  // Atlas supports per-map deep links (the share button in its Open Map panel
+  // produces them), but the parameter name isn't documented. "webmap" is an
+  // UNVERIFIED guess — open a map in MapMaker, hit its share button, and if
+  // the copied URL uses a different key, change this one constant.
+  const MAPMAKER_WEBMAP_PARAM = "webmap";
 
   // Copilot Studio agent endpoint (CSV cleanup — unchanged from agent build)
   const AGENT_TOKEN_ENDPOINT = "https://68c61fd12475ebdd804374cf052e0d.0e.environment.api.powerplatform.com/powervirtualagents/botsbyschema/cr86a_Fieldworkdata/directline/token?api-version=2022-03-01-preview";
@@ -595,6 +643,8 @@ Eucalyptus,85,-117.1610,32.7114`;
       if (k === name) el.classList.remove("hidden");
       else el.classList.add("hidden");
     });
+    // Configure stage takes over the whole viewport (map left, tools right)
+    document.body.classList.toggle("fullmap", name === "configure");
   }
 
   // Logging
@@ -2176,7 +2226,8 @@ Eucalyptus,85,-117.1610,32.7114`;
     showStage("result");
     document.getElementById("resultDetail").textContent =
       `“${title}” — ${pointCount} points, saved privately to ${auth.username}'s content`;
-    document.getElementById("resultCta").href = MAPMAKER_URL;
+    document.getElementById("resultCta").href =
+      MAPMAKER_URL + "&" + MAPMAKER_WEBMAP_PARAM + "=" + itemId;
     document.getElementById("resultItemLink").href = "https://www.arcgis.com/home/item.html?id=" + itemId;
     document.getElementById("resultViewerLink").href = "https://www.arcgis.com/apps/mapviewer/index.html?webmap=" + itemId;
     document.getElementById("resultMeta").textContent = "Item ID: " + itemId;
