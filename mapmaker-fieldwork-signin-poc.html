@@ -81,12 +81,6 @@
       cursor: pointer; transition: background 0.15s ease;
     }
     .hbtn-ghost:hover { background: rgba(255, 255, 255, 0.12); }
-    .build-badge {
-      background: var(--brand-primary); color: #fff;
-      font-size: 11px; font-weight: 700;
-      letter-spacing: 0.08em; text-transform: uppercase;
-      padding: 4px 10px; border-radius: 4px;
-    }
 
     .app-main { flex: 1 1 auto; min-height: 0; display: flex; }
     .map-area { flex: 1 1 auto; min-width: 0; position: relative; background: #eef2f5; }
@@ -155,15 +149,6 @@
       color: #888; margin-bottom: 12px;
     }
 
-    /* ---- Diagnostic log: floating chip over the map, always reachable ---- */
-    .log-toggle {
-      position: fixed; bottom: 8px; left: 8px; z-index: 60;
-      background: rgba(255,255,255,0.95); border: 1px solid var(--hairline);
-      border-radius: 6px; padding: 4px 10px; margin: 0;
-      font-size: 12px; color: #888;
-    }
-    .log-toggle summary { cursor: pointer; }
-    .log { width: min(560px, 80vw); max-height: 180px; }
 
     /* ---- Tools sidebar (configure stage) ---- */
     .configure-side {
@@ -372,18 +357,6 @@
     }
     .modal-finePrint { font-size: 11px; color: #999; margin-top: 16px; }
 
-    .log {
-      background: #0f1115; color: #c9d1d9;
-      padding: 12px; border-radius: 6px;
-      font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      font-size: 11px; line-height: 1.5;
-      max-height: 200px; overflow-y: auto;
-      margin-top: 10px;
-    }
-    .log .ts { color: #6e7681; }
-    .log .ok { color: #7fc28b; }
-    .log .err { color: #f08b80; }
-    .log .agent { color: #ffcc73; }
 
     .hidden { display: none !important; }
   </style>
@@ -400,7 +373,6 @@
       <button id="restartBtn" class="hbtn-ghost">Start over</button>
       <button id="publishBtn" class="hbtn-primary">Send to MapMaker</button>
     </div>
-    <div class="build-badge">Sign-in POC</div>
   </div>
 </div>
 
@@ -570,10 +542,6 @@
   </div>
 </div>
 
-<details class="log-toggle">
-  <summary>Diagnostic log (sign-in POC build)</summary>
-  <div class="log" id="log"></div>
-</details>
 
 
 <script>
@@ -735,14 +703,10 @@ Eucalyptus,85,-117.1610,32.7114`;
     document.getElementById("headerActions").classList.toggle("hidden", name !== "configure");
   }
 
-  // Logging
-  const logEl = document.getElementById("log");
+  // Logging — console only (the on-page diagnostic panel was removed for
+  // the demo; open DevTools to see these)
   function log(msg, cls = "") {
-    const ts = new Date().toLocaleTimeString();
-    const line = document.createElement("div");
-    line.innerHTML = `<span class="ts">${escapeHtml(ts)}</span> <span class="${cls}">${escapeHtml(msg)}</span>`;
-    logEl.appendChild(line);
-    logEl.scrollTop = logEl.scrollHeight;
+    console.log("[fieldwork] " + msg);
   }
   function escapeHtml(s) {
     return String(s == null ? "" : s)
