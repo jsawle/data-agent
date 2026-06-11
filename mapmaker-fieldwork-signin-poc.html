@@ -171,6 +171,27 @@
     .configure-side .btn-row .btn-secondary { flex: 1; }
     .map-preview-note { font-size: 11px; color: var(--ink-muted); margin-top: 10px; }
 
+    /* ---- Point symbol controls ---- */
+    .symbol-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+    .symbol-label { flex: 0 0 48px; font-size: 13px; color: #555; }
+    .shape-options { display: flex; gap: 6px; }
+    .shape-btn {
+      width: 34px; height: 30px; border: 2px solid #ddd; border-radius: 6px;
+      background: #fff; cursor: pointer; font-size: 15px; color: #444; line-height: 1;
+      transition: border-color 0.15s ease;
+    }
+    .shape-btn:hover { border-color: var(--brand-accent); }
+    .shape-btn.selected { border-color: var(--brand-primary); background: var(--brand-tint); }
+    .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+    .swatch-btn {
+      width: 24px; height: 24px; border-radius: 50%;
+      border: 2px solid rgba(0, 0, 0, 0.15); cursor: pointer; padding: 0;
+    }
+    .swatch-btn:hover { border-color: rgba(0, 0, 0, 0.45); }
+    .swatch-btn.selected { border-color: #1a1a1a; }
+    #sizeSlider { flex: 1; accent-color: var(--brand-primary); }
+    #sizeValue { font-size: 12px; color: #888; flex: 0 0 44px; text-align: right; }
+
     @media (max-width: 900px) {
       .app-main { flex-direction: column; }
       .map-area { flex: 0 0 45vh; }
@@ -463,6 +484,23 @@
       <div id="fieldsContainer"></div>
     </div>
 
+    <div class="config-section" id="symbolSection">
+      <h3>Points</h3>
+      <div class="symbol-row" id="shapeRow">
+        <span class="symbol-label">Shape</span>
+        <div class="shape-options" id="shapeOptions"></div>
+      </div>
+      <div class="symbol-row" id="colorRow">
+        <span class="symbol-label">Color</span>
+        <div class="swatches" id="colorSwatches"></div>
+      </div>
+      <div class="symbol-row">
+        <span class="symbol-label">Size</span>
+        <input type="range" id="sizeSlider" min="6" max="28" step="1" value="12">
+        <span id="sizeValue">12 px</span>
+      </div>
+    </div>
+
     <div class="config-summary" id="configSummary"></div>
 
     <div class="btn-row" style="margin-top: 14px;">
@@ -642,6 +680,7 @@ Eucalyptus,85,-117.1610,32.7114`;
     csvBlob: null, displayName: null, fcLayer: null,
     features: [], fields: [], numeric: [], categorical: [],
     style: null, fieldChoices: { color: null, size: null, label: null },
+    symbolChoices: { shape: "esriSMSCircle", color: [0, 122, 194], size: 12 },
     isSample: false,
   };
 
@@ -1371,15 +1410,15 @@ Eucalyptus,85,-117.1610,32.7114`;
   const POINT_FILL_ALPHA = 204;
 
   function buildSimpleSymbol(color, size) {
-    // Normalise whatever colour we're given to [r,g,b] and force the fill
-    // alpha to POINT_FILL_ALPHA, so every point is consistently 20% transparent
-    // regardless of which renderer/palette entry produced the colour.
-    const base = color || [102, 194, 165];
+    // Defaults come from the user's Point controls (shape always does);
+    // renderers that assign data-driven colours/sizes pass them explicitly.
+    const sym = state.symbolChoices || { shape: "esriSMSCircle", color: [0, 122, 194], size: 12 };
+    const base = color || sym.color;
     const fill = [base[0], base[1], base[2], POINT_FILL_ALPHA];
     return {
-      type: "esriSMS", style: "esriSMSCircle",
+      type: "esriSMS", style: sym.shape,
       color: fill,
-      size: size || 12,
+      size: size || sym.size,
       // Dark grey outline at 1px so points lift off the busy basemap.
       // (ArcGIS esriSMS has no drop-shadow property; a defined dark outline
       // is the supported way to add definition.)
@@ -1390,9 +1429,13 @@ Eucalyptus,85,-117.1610,32.7114`;
   function buildSizeVariable(field, features) {
     const values = features.map(f => f.attributes[field]).filter(v => v !== null && !isNaN(v));
     if (!values.length) return null;
+    // Scale the size ramp around the user's chosen base size
+    // (default 12 reproduces the original 8–40 range).
+    const s = (state.symbolChoices && state.symbolChoices.size) || 12;
     return {
       type: "sizeInfo", field,
-      minSize: 8, maxSize: 40,
+      minSize: Math.max(4, Math.round(s * 0.7)),
+      maxSize: Math.round(s * 3.3),
       minDataValue: Math.min(...values),
       maxDataValue: Math.max(...values)
     };
@@ -1411,6 +1454,7 @@ Eucalyptus,85,-117.1610,32.7114`;
     const minTotal = Math.min(...totals);
     const maxTotal = Math.max(...totals);
 
+    const s = (state.symbolChoices && state.symbolChoices.size) || 12;
     return {
       type: "pieChart",
       attributes: numericFields.slice(0, 8).map((fld, i) => ({
@@ -1418,14 +1462,14 @@ Eucalyptus,85,-117.1610,32.7114`;
         color: PALETTE[i % PALETTE.length],
         label: fld.replace(/_/g, " ")
       })),
-      size: 24,
+      size: s * 2,
       holePercentage: 0.4,
       outline: { color: [255, 255, 255, 255], width: 0.5, type: "esriSLS", style: "esriSLSSolid" },
       visualVariables: [{
         type: "sizeInfo",
         field: "_pieTotal",
-        minSize: 14,
-        maxSize: 48,
+        minSize: Math.round(14 * s / 12),
+        maxSize: Math.round(48 * s / 12),
         minDataValue: minTotal,
         maxDataValue: maxTotal
       }]
@@ -1470,7 +1514,7 @@ Eucalyptus,85,-117.1610,32.7114`;
           classMinValue: min,
           classMaxValue: max,
           label: String(min),
-          symbol: buildSimpleSymbol(SEQUENTIAL_RAMP[SEQUENTIAL_RAMP.length - 1], 12)
+          symbol: buildSimpleSymbol(SEQUENTIAL_RAMP[SEQUENTIAL_RAMP.length - 1])
         }]
       };
     }
@@ -1485,7 +1529,7 @@ Eucalyptus,85,-117.1610,32.7114`;
         classMinValue: lo,
         classMaxValue: hi,
         label: `${round(lo)} – ${round(hi)}`,
-        symbol: buildSimpleSymbol(SEQUENTIAL_RAMP[i % SEQUENTIAL_RAMP.length], 12)
+        symbol: buildSimpleSymbol(SEQUENTIAL_RAMP[i % SEQUENTIAL_RAMP.length])
       });
     }
     return {
@@ -1506,12 +1550,12 @@ Eucalyptus,85,-117.1610,32.7114`;
     return {
       type: "uniqueValue",
       field1: field,
-      defaultSymbol: buildSimpleSymbol([179, 179, 179, 200], 12),
+      defaultSymbol: buildSimpleSymbol([179, 179, 179, 200]),
       defaultLabel: "Other",
       uniqueValueInfos: values.map((val, i) => ({
         value: val,
         label: String(val),
-        symbol: buildSimpleSymbol(PALETTE[i % PALETTE.length], 12)
+        symbol: buildSimpleSymbol(PALETTE[i % PALETTE.length])
       }))
     };
   }
@@ -1706,8 +1750,10 @@ Eucalyptus,85,-117.1610,32.7114`;
         const view = new m.MapView({
           container: "mapPreview",
           map: new m.EsriMap({ basemap }),
-          center: [0, 25],
-          zoom: 2,
+          // Zoom 3 fills a typical widescreen window with map — no white
+          // margins around the projection on opening.
+          center: [-20, 30],
+          zoom: 3,
           constraints: { snapToZoom: false }
         });
         log("map: MapView ready (NatGeo basemap item " + NATGEO_BASEMAP_ITEM_ID + ")", "ok");
@@ -2102,7 +2148,66 @@ Eucalyptus,85,-117.1610,32.7114`;
       `Found ${state.features.length} points · ${state.numeric.length} numeric, ${state.categorical.length} categorical columns.`;
     renderStyleOptions();
     renderFieldsPanel();
+    renderSymbolPanel();
     updateConfigSummary();   // also schedules the live preview render
+  }
+
+  // ----------------------------------------------------------------------
+  // Point symbol controls — shape, colour, size.
+  // Colour swatches only show for styles where every point shares one colour
+  // (Locations, By size); category/ramp/pie colours are data-driven.
+  // Shape applies everywhere except pie charts (pies are pies).
+  // ----------------------------------------------------------------------
+  const SHAPES = [
+    { id: "esriSMSCircle",   glyph: "●", name: "Circle" },
+    { id: "esriSMSSquare",   glyph: "■", name: "Square" },
+    { id: "esriSMSDiamond",  glyph: "◆", name: "Diamond" },
+    { id: "esriSMSTriangle", glyph: "▲", name: "Triangle" },
+  ];
+
+  function renderSymbolPanel() {
+    const c = state.symbolChoices;
+    const isPie = state.style.id === "pie_chart";
+    const singleColor = state.style.id === "simple" || state.style.id === "graduated";
+
+    document.getElementById("shapeRow").classList.toggle("hidden", isPie);
+    document.getElementById("colorRow").classList.toggle("hidden", isPie || !singleColor);
+
+    const shapeWrap = document.getElementById("shapeOptions");
+    shapeWrap.innerHTML = "";
+    for (const s of SHAPES) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "shape-btn" + (c.shape === s.id ? " selected" : "");
+      b.title = s.name;
+      b.textContent = s.glyph;
+      b.addEventListener("click", () => {
+        c.shape = s.id;
+        renderSymbolPanel();
+        updateConfigSummary();
+      });
+      shapeWrap.appendChild(b);
+    }
+
+    const swWrap = document.getElementById("colorSwatches");
+    swWrap.innerHTML = "";
+    for (const col of PALETTE) {
+      const b = document.createElement("button");
+      b.type = "button";
+      const sel = col[0] === c.color[0] && col[1] === c.color[1] && col[2] === c.color[2];
+      b.className = "swatch-btn" + (sel ? " selected" : "");
+      b.title = "rgb(" + col.slice(0, 3).join(", ") + ")";
+      b.style.background = "rgb(" + col[0] + "," + col[1] + "," + col[2] + ")";
+      b.addEventListener("click", () => {
+        c.color = col.slice(0, 3);
+        renderSymbolPanel();
+        updateConfigSummary();
+      });
+      swWrap.appendChild(b);
+    }
+
+    document.getElementById("sizeSlider").value = c.size;
+    document.getElementById("sizeValue").textContent = c.size + " px";
   }
 
   // Short label for the compact tile (the full name goes in the description).
@@ -2128,6 +2233,7 @@ Eucalyptus,85,-117.1610,32.7114`;
           state.fieldChoices = pickAutoFields(style, state.numeric, state.categorical);
           renderStyleOptions();
           renderFieldsPanel();
+          renderSymbolPanel();
           updateConfigSummary();
         });
       }
@@ -2273,7 +2379,7 @@ Eucalyptus,85,-117.1610,32.7114`;
     if (previewViewPromise) {
       previewViewPromise.then(v => {
         v.map.removeAll();
-        v.goTo({ center: [0, 25], zoom: 2 }).catch(() => {});
+        v.goTo({ center: [-20, 30], zoom: 3 }).catch(() => {});
       }).catch(() => {});
     }
     pendingOversizedBlob = null;
@@ -2282,6 +2388,7 @@ Eucalyptus,85,-117.1610,32.7114`;
       csvBlob: null, displayName: null, fcLayer: null,
       features: [], fields: [], numeric: [], categorical: [],
       style: null, fieldChoices: { color: null, size: null, label: null },
+      symbolChoices: { shape: "esriSMSCircle", color: [0, 122, 194], size: 12 },
       isSample: false,
     });
     showStage("upload");
@@ -2344,6 +2451,12 @@ Eucalyptus,85,-117.1610,32.7114`;
   });
   document.getElementById("signinMapName").addEventListener("keydown", (e) => {
     if (e.key === "Enter") submitSignin();
+  });
+
+  document.getElementById("sizeSlider").addEventListener("input", () => {
+    state.symbolChoices.size = parseInt(document.getElementById("sizeSlider").value, 10);
+    document.getElementById("sizeValue").textContent = state.symbolChoices.size + " px";
+    schedulePreviewUpdate();
   });
 
   document.getElementById("restartBtn").addEventListener("click", reset);
