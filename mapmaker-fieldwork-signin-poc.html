@@ -43,21 +43,25 @@
       background: #f5f6f7;
       color: var(--ink);
       line-height: 1.5;
-      min-height: 100vh;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
 
     .header {
       background: var(--brand-header-bg);
-      border-bottom: 4px solid var(--esri-blue-300);
-      padding: 20px 32px;
+      border-bottom: 3px solid var(--esri-blue-300);
+      padding: 10px 24px;
+      flex: 0 0 auto;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
     }
-    .header-left { display: flex; align-items: baseline; gap: 16px; }
-    .header-title { color: white; font-size: 28px; font-weight: 500; letter-spacing: 0.5px; }
-    .header-sub { color: var(--brand-on-dark); font-size: 14px; letter-spacing: 0.5px; }
+    .header-left { display: flex; align-items: baseline; gap: 14px; }
+    .header-title { color: white; font-size: 20px; font-weight: 500; letter-spacing: 0.5px; }
+    .header-sub { color: var(--brand-on-dark); font-size: 12px; letter-spacing: 0.5px; }
     .build-badge {
       background: var(--brand-primary); color: #fff;
       font-size: 11px; font-weight: 700;
@@ -65,14 +69,25 @@
       padding: 4px 10px; border-radius: 4px;
     }
 
-    .container { max-width: 800px; margin: 32px auto; padding: 0 24px; }
+    .app-main { flex: 1 1 auto; min-height: 0; display: flex; }
+    .map-area { flex: 1 1 auto; min-width: 0; position: relative; background: #eef2f5; }
+    #mapPreview { position: absolute; inset: 0; }
+
+    /* Stage panels float over the map — the map stays visible and interactive
+       around them, so it's obvious from the first second what the app does. */
+    .overlay {
+      position: absolute; inset: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px; overflow-y: auto;
+      pointer-events: none;
+    }
+    .overlay-card { pointer-events: auto; width: 100%; max-width: 560px; }
 
     .card {
-      background: white;
+      background: rgba(255, 255, 255, 0.97);
       border-radius: 8px;
-      padding: 32px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-      margin-bottom: 24px;
+      padding: 28px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
     }
 
     h2 { font-size: 18px; margin-bottom: 8px; color: var(--ink); }
@@ -121,23 +136,17 @@
       color: #888; margin-bottom: 12px;
     }
 
-    /* ---- Full-screen configure layout: map fills the page, tools on the right ---- */
-    body.fullmap { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
-    body.fullmap .header { padding: 10px 24px; border-bottom-width: 3px; flex: 0 0 auto; }
-    body.fullmap .header-title { font-size: 20px; }
-    body.fullmap .header-sub { font-size: 12px; }
-    body.fullmap .container { max-width: none; width: 100%; margin: 0; padding: 0; flex: 1 1 auto; min-height: 0; display: flex; }
-    /* keep the diagnostic log reachable as a floating chip over the map */
-    body.fullmap .log-toggle {
+    /* ---- Diagnostic log: floating chip over the map, always reachable ---- */
+    .log-toggle {
       position: fixed; bottom: 8px; left: 8px; z-index: 60;
       background: rgba(255,255,255,0.95); border: 1px solid var(--hairline);
       border-radius: 6px; padding: 4px 10px; margin: 0;
+      font-size: 12px; color: #888;
     }
-    body.fullmap .log { width: min(560px, 80vw); max-height: 180px; }
+    .log-toggle summary { cursor: pointer; }
+    .log { width: min(560px, 80vw); max-height: 180px; }
 
-    #stage-configure { display: flex; width: 100%; height: 100%; background: #fff; }
-    .configure-map { flex: 1 1 auto; min-width: 0; position: relative; background: #eef2f5; }
-    #mapPreview { width: 100%; height: 100%; }
+    /* ---- Tools sidebar (configure stage) ---- */
     .configure-side {
       flex: 0 0 400px; max-width: 400px;
       border-left: 1px solid var(--hairline);
@@ -163,8 +172,8 @@
     .map-preview-note { font-size: 11px; color: var(--ink-muted); margin-top: 10px; }
 
     @media (max-width: 900px) {
-      #stage-configure { flex-direction: column; }
-      .configure-map { flex: 0 0 45vh; }
+      .app-main { flex-direction: column; }
+      .map-area { flex: 0 0 45vh; }
       .configure-side { flex: 1 1 auto; max-width: none; border-left: none; border-top: 1px solid var(--hairline); }
     }
 
@@ -236,6 +245,7 @@
       background: linear-gradient(180deg, var(--esri-blue-500) 0%, var(--esri-blue-700) 100%);
       color: #fff; padding: 32px;
       border-radius: 8px; text-align: center;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
     }
     .result-title { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
     .result-detail { font-size: 14px; margin-bottom: 24px; opacity: 0.9; }
@@ -315,8 +325,6 @@
     }
     .modal-finePrint { font-size: 11px; color: #999; margin-top: 16px; }
 
-    .log-toggle { margin-top: 24px; font-size: 12px; color: #888; }
-    .log-toggle summary { cursor: pointer; }
     .log {
       background: #0f1115; color: #c9d1d9;
       padding: 12px; border-radius: 6px;
@@ -343,153 +351,163 @@
   <div class="build-badge">Sign-in POC</div>
 </div>
 
-<div class="container">
+<div class="app-main">
 
-  <!-- STAGE 1: Upload -->
-  <div id="stage-upload" class="card">
-    <h2>Upload your data and see it in MapMaker</h2>
-    <p class="subtitle">Drop a CSV with latitude and longitude columns. We'll do the rest.</p>
+  <!-- The map IS the app: always full-screen behind everything -->
+  <div class="map-area">
+    <div id="mapPreview"></div>
 
-    <div id="dropZone" class="dropzone">
-      <div class="dropzone-icon">📍</div>
-      <div class="dropzone-title">Drop your spreadsheet here</div>
-      <div class="dropzone-hint">or click to browse</div>
-      <div><span class="format-pill">CSV</span></div>
-      <input type="file" id="fileInput" accept=".csv" style="display: none;">
-    </div>
+    <!-- STAGE 1: Upload — floats over the map -->
+    <div id="stage-upload" class="overlay">
+      <div class="card overlay-card">
+        <h2>Upload your data and see it in MapMaker</h2>
+        <p class="subtitle">Drop a CSV with latitude and longitude columns. We'll do the rest.</p>
 
-    <div class="btn-row" style="margin-top: 24px;">
-      <button id="sampleBtn" class="btn btn-secondary">Try a sample</button>
-      <span style="color: #888; font-size: 13px;">No file? Click here for a tree-survey demo.</span>
-    </div>
+        <div id="dropZone" class="dropzone">
+          <div class="dropzone-icon">📍</div>
+          <div class="dropzone-title">Drop your spreadsheet here</div>
+          <div class="dropzone-hint">or click to browse</div>
+          <div><span class="format-pill">CSV</span></div>
+          <input type="file" id="fileInput" accept=".csv" style="display: none;">
+        </div>
 
-    <p style="color: #888; font-size: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee;">
-      Up to 1000 rows per map. Larger datasets are best handled in a full ArcGIS Online account.
-    </p>
-    <p style="color: #888; font-size: 12px; margin-top: 8px;">
-      Your map is saved to your own ArcGIS Online account — private by default. You'll sign in when you click Send to MapMaker.
-    </p>
-  </div>
+        <div class="btn-row" style="margin-top: 20px;">
+          <button id="sampleBtn" class="btn btn-secondary">Try a sample</button>
+          <span style="color: #888; font-size: 13px;">No file? Click for a tree-survey demo.</span>
+        </div>
 
-  <!-- STAGE 1B: Agent step -->
-  <div id="stage-agent" class="card hidden">
-    <div class="agent-card" id="agentCard"></div>
-    <div class="btn-row">
-      <button id="agentStartOverBtn" class="btn btn-secondary">Start over</button>
-    </div>
-  </div>
-
-  <!-- STAGE 2: Full-screen map + tools sidebar -->
-  <div id="stage-configure" class="hidden">
-    <div class="configure-map">
-      <div id="mapPreview"></div>
-    </div>
-    <aside class="configure-side">
-      <h2>Looks good. Here's how we'll map it.</h2>
-      <p class="subtitle" id="configureSubtitle"></p>
-
-      <div class="config-section">
-        <h3>Map style</h3>
-        <div class="style-options" id="styleOptions"></div>
-        <div class="style-description" id="styleDescription"></div>
+        <p style="color: #888; font-size: 12px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #eee;">
+          Up to 1000 rows per map. Maps are saved privately to your own ArcGIS Online account — you'll sign in when you click Send to MapMaker.
+        </p>
       </div>
+    </div>
 
-      <div class="config-section" id="fieldsSection">
-        <h3>Fields</h3>
-        <div id="fieldsContainer"></div>
+    <!-- STAGE 1B: Agent step -->
+    <div id="stage-agent" class="overlay hidden">
+      <div class="card overlay-card">
+        <div class="agent-card" id="agentCard"></div>
+        <div class="btn-row">
+          <button id="agentStartOverBtn" class="btn btn-secondary">Start over</button>
+        </div>
       </div>
+    </div>
 
-      <div class="config-summary" id="configSummary"></div>
-
-      <div class="btn-row" style="margin-top: 14px;">
-        <button id="publishBtn" class="btn btn-large">Send to MapMaker</button>
+    <!-- STAGE 2A: File too large -->
+    <div id="stage-toolarge" class="overlay hidden">
+      <div class="card overlay-card">
+        <h2>This file is a bit large</h2>
+        <p class="subtitle" id="toolargeSubtitle"></p>
+        <div class="btn-row" style="margin-top: 20px;">
+          <button id="truncateBtn" class="btn btn-large">Map first 1000 rows</button>
+          <button id="toolargeRestartBtn" class="btn btn-secondary">Try a different file</button>
+        </div>
       </div>
-      <div class="btn-row" style="margin-top: 10px;">
-        <button id="downloadJsonBtn" class="btn btn-secondary">Download web map JSON</button>
-        <button id="restartBtn" class="btn btn-secondary">Start over</button>
+    </div>
+
+    <!-- STAGE 3: Publishing -->
+    <div id="stage-publishing" class="overlay hidden">
+      <div class="card overlay-card">
+        <h2>Saving your map…</h2>
+        <p class="subtitle">This usually takes about 5 seconds.</p>
+        <div id="progressList"></div>
       </div>
+    </div>
 
-      <div class="map-preview-note" id="mapPreviewNote">Loading preview…</div>
-    </aside>
-  </div>
+    <!-- STAGE 4: Result -->
+    <div id="stage-result" class="overlay hidden">
+      <div class="overlay-card" style="max-width: 480px;">
+        <div class="result-card">
+          <div class="result-title">Saved to your ArcGIS account 🎉</div>
+          <div class="result-detail" id="resultDetail"></div>
+          <a id="resultCta" class="result-cta" target="_blank" rel="noopener">Open MapMaker</a>
+          <div class="result-links">
+            <a id="resultItemLink" target="_blank" rel="noopener">View item in ArcGIS Online</a>
+            <a id="resultViewerLink" target="_blank" rel="noopener">Open in Map Viewer</a>
+          </div>
+          <div class="result-hint">In MapMaker, sign in with the same account — your map is under <strong>My Maps</strong>.</div>
+          <div class="result-meta" id="resultMeta"></div>
+        </div>
+        <div class="btn-row" style="margin-top: 16px; justify-content: center;">
+          <button id="anotherBtn" class="btn btn-secondary">Map another file</button>
+        </div>
+      </div>
+    </div>
 
-  <!-- STAGE 2A: File too large -->
-  <div id="stage-toolarge" class="card hidden">
-    <h2>This file is a bit large</h2>
-    <p class="subtitle" id="toolargeSubtitle"></p>
-    <div class="btn-row" style="margin-top: 24px;">
-      <button id="truncateBtn" class="btn btn-large">Map first 1000 rows</button>
-      <button id="toolargeRestartBtn" class="btn btn-secondary">Try a different file</button>
+    <!-- Error -->
+    <div id="errorBox" class="overlay hidden">
+      <div class="card overlay-card">
+        <div class="error">
+          <strong>Something went wrong</strong>
+          <span id="errorText"></span>
+        </div>
+        <div class="btn-row" style="margin-top: 16px;">
+          <button id="errorRestartBtn" class="btn btn-secondary">Try again</button>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- STAGE 3: Publishing -->
-  <div id="stage-publishing" class="card hidden">
-    <h2>Saving your map…</h2>
-    <p class="subtitle">This usually takes about 5 seconds.</p>
-    <div id="progressList"></div>
-  </div>
+  <!-- STAGE 2: Tools sidebar (shows once data is loaded) -->
+  <aside id="stage-configure" class="configure-side hidden">
+    <h2>Looks good. Here's how we'll map it.</h2>
+    <p class="subtitle" id="configureSubtitle"></p>
 
-  <!-- STAGE 4: Result -->
-  <div id="stage-result" class="card hidden" style="background: transparent; box-shadow: none; padding: 0;">
-    <div class="result-card">
-      <div class="result-title">Saved to your ArcGIS account 🎉</div>
-      <div class="result-detail" id="resultDetail"></div>
-      <a id="resultCta" class="result-cta" target="_blank" rel="noopener">Open MapMaker</a>
-      <div class="result-links">
-        <a id="resultItemLink" target="_blank" rel="noopener">View item in ArcGIS Online</a>
-        <a id="resultViewerLink" target="_blank" rel="noopener">Open in Map Viewer</a>
-      </div>
-      <div class="result-hint">In MapMaker, sign in with the same account — your map is under <strong>My Maps</strong>.</div>
-      <div class="result-meta" id="resultMeta"></div>
+    <div class="config-section">
+      <h3>Map style</h3>
+      <div class="style-options" id="styleOptions"></div>
+      <div class="style-description" id="styleDescription"></div>
     </div>
-    <div class="btn-row" style="margin-top: 24px; justify-content: center;">
-      <button id="anotherBtn" class="btn btn-secondary">Map another file</button>
-    </div>
-  </div>
 
-  <!-- Sign-in modal -->
-  <div id="signinModal" class="modal-overlay hidden">
-    <div class="modal">
-      <h2>Send to MapMaker</h2>
-      <p class="subtitle">Sign in with your ArcGIS Online account — the same identity MapMaker's sign-in uses. The map is saved privately to your own content.</p>
-      <div id="signinSessionNote" class="session-note hidden"></div>
-      <label for="signinUser">ArcGIS Online username</label>
-      <input type="text" id="signinUser" autocomplete="username">
-      <label for="signinPass">Password</label>
-      <input type="password" id="signinPass" autocomplete="current-password">
-      <div class="remember">
-        <input type="checkbox" id="signinRemember">
-        <label for="signinRemember" style="margin: 0;">Remember my session for this browser tab</label>
-      </div>
-      <label for="signinMapName">Map name</label>
-      <input type="text" id="signinMapName">
-      <div id="signinError" class="modal-error hidden"></div>
-      <div class="btn-row" style="margin-top: 20px; justify-content: flex-end;">
-        <button id="signinCancel" class="btn btn-secondary">Cancel</button>
-        <button id="signinSubmit" class="btn">Save to my account</button>
-      </div>
-      <p class="modal-finePrint">Your password goes directly to arcgis.com to create a temporary token and is never stored by this page. A production build would use OAuth sign-in instead.</p>
+    <div class="config-section" id="fieldsSection">
+      <h3>Fields</h3>
+      <div id="fieldsContainer"></div>
     </div>
-  </div>
 
-  <!-- Error -->
-  <div id="errorBox" class="card hidden">
-    <div class="error">
-      <strong>Something went wrong</strong>
-      <span id="errorText"></span>
-    </div>
-    <div class="btn-row" style="margin-top: 16px;">
-      <button id="errorRestartBtn" class="btn btn-secondary">Try again</button>
-    </div>
-  </div>
+    <div class="config-summary" id="configSummary"></div>
 
-  <details class="log-toggle">
-    <summary>Diagnostic log (sign-in POC build)</summary>
-    <div class="log" id="log"></div>
-  </details>
+    <div class="btn-row" style="margin-top: 14px;">
+      <button id="publishBtn" class="btn btn-large">Send to MapMaker</button>
+    </div>
+    <div class="btn-row" style="margin-top: 10px;">
+      <button id="downloadJsonBtn" class="btn btn-secondary">Download web map JSON</button>
+      <button id="restartBtn" class="btn btn-secondary">Start over</button>
+    </div>
+
+    <div class="map-preview-note" id="mapPreviewNote"></div>
+  </aside>
 
 </div>
+
+<!-- Sign-in modal -->
+<div id="signinModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h2>Send to MapMaker</h2>
+    <p class="subtitle">Sign in with your ArcGIS Online account — the same identity MapMaker's sign-in uses. The map is saved privately to your own content.</p>
+    <div id="signinSessionNote" class="session-note hidden"></div>
+    <label for="signinUser">ArcGIS Online username</label>
+    <input type="text" id="signinUser" autocomplete="username">
+    <label for="signinPass">Password</label>
+    <input type="password" id="signinPass" autocomplete="current-password">
+    <div class="remember">
+      <input type="checkbox" id="signinRemember">
+      <label for="signinRemember" style="margin: 0;">Remember my session for this browser tab</label>
+    </div>
+    <label for="signinMapName">Map name</label>
+    <input type="text" id="signinMapName">
+    <div id="signinError" class="modal-error hidden"></div>
+    <div class="btn-row" style="margin-top: 20px; justify-content: flex-end;">
+      <button id="signinCancel" class="btn btn-secondary">Cancel</button>
+      <button id="signinSubmit" class="btn">Save to my account</button>
+    </div>
+    <p class="modal-finePrint">Your password goes directly to arcgis.com to create a temporary token and is never stored by this page. A production build would use OAuth sign-in instead.</p>
+  </div>
+</div>
+
+<details class="log-toggle">
+  <summary>Diagnostic log (sign-in POC build)</summary>
+  <div class="log" id="log"></div>
+</details>
+
 
 <script>
   // -----------------------------------------------------------------------
@@ -643,8 +661,6 @@ Eucalyptus,85,-117.1610,32.7114`;
       if (k === name) el.classList.remove("hidden");
       else el.classList.add("hidden");
     });
-    // Configure stage takes over the whole viewport (map left, tools right)
-    document.body.classList.toggle("fullmap", name === "configure");
   }
 
   // Logging
@@ -1328,7 +1344,10 @@ Eucalyptus,85,-117.1610,32.7114`;
     return true;
   }
 
-  const AUTO_PICK_ORDER = ["pie_chart", "categorical_size", "categorical", "graduated", "simple"];
+  // Auto-pick: prefer the simplest expressive default for the data. Pie
+  // charts are a deliberate choice for composition data (litter surveys,
+  // quadrats) — they are NEVER auto-picked, only selected manually.
+  const AUTO_PICK_ORDER = ["categorical_size", "categorical", "graduated", "simple"];
 
   function pickAutoStyle(numeric, categorical) {
     for (const id of AUTO_PICK_ORDER) {
@@ -1674,8 +1693,29 @@ Eucalyptus,85,-117.1610,32.7114`;
     });
   }
 
-  let previewView = null;
+  let previewViewPromise = null;
   let previewTimer = null;
+
+  // Create the background MapView exactly once (single-flight: safe to call
+  // from page load AND renderPreview without racing a double-create).
+  function ensurePreviewView() {
+    if (!previewViewPromise) {
+      previewViewPromise = (async () => {
+        const m = await getEsri();
+        const basemap = new m.Basemap({ portalItem: { id: NATGEO_BASEMAP_ITEM_ID } });
+        const view = new m.MapView({
+          container: "mapPreview",
+          map: new m.EsriMap({ basemap }),
+          center: [0, 25],
+          zoom: 2,
+          constraints: { snapToZoom: false }
+        });
+        log("map: MapView ready (NatGeo basemap item " + NATGEO_BASEMAP_ITEM_ID + ")", "ok");
+        return view;
+      })();
+    }
+    return previewViewPromise;
+  }
 
   function schedulePreviewUpdate() {
     if (previewTimer) clearTimeout(previewTimer);
@@ -1687,24 +1727,12 @@ Eucalyptus,85,-117.1610,32.7114`;
     const note = document.getElementById("mapPreviewNote");
     try {
       const m = await getEsri();
+      const view = await ensurePreviewView();
       const extent = m.Extent.fromJSON(computeExtent(state.features));
 
-      if (!previewView) {
-        // Esri basemap, via the same portal item MapMaker's NatGeo style uses
-        const basemap = new m.Basemap({ portalItem: { id: NATGEO_BASEMAP_ITEM_ID } });
-        previewView = new m.MapView({
-          container: "mapPreview",
-          map: new m.EsriMap({ basemap }),
-          extent,
-          constraints: { snapToZoom: false }
-        });
-        log("preview: MapView created (NatGeo basemap item " + NATGEO_BASEMAP_ITEM_ID + ")", "ok");
-      } else {
-        previewView.goTo(extent).catch(() => {});
-      }
-
-      previewView.map.removeAll();
-      previewView.map.add(buildPreviewLayer(m));
+      view.map.removeAll();
+      view.map.add(buildPreviewLayer(m));
+      view.goTo(extent).catch(() => {});
       if (note) note.textContent = "Live preview — " + state.style.name +
         " on the National Geographic Style basemap, the same map MapMaker will show.";
     } catch (err) {
@@ -2241,6 +2269,13 @@ Eucalyptus,85,-117.1610,32.7114`;
 
   function reset() {
     closeSignin();
+    // Clear the data layer and glide back to the world view behind the upload card
+    if (previewViewPromise) {
+      previewViewPromise.then(v => {
+        v.map.removeAll();
+        v.goTo({ center: [0, 25], zoom: 2 }).catch(() => {});
+      }).catch(() => {});
+    }
     pendingOversizedBlob = null;
     pendingDisplayName = null;
     Object.assign(state, {
@@ -2319,6 +2354,9 @@ Eucalyptus,85,-117.1610,32.7114`;
   document.getElementById("agentStartOverBtn").addEventListener("click", reset);
 
   loadStoredSession();
+  // Start the full-screen map immediately — the upload card floats over it,
+  // so the first thing anyone sees is a map waiting for their data.
+  ensurePreviewView().catch(err => log("map init failed: " + err.message, "err"));
   log("ready. sign-in POC build — maps save to the signed-in user's own ArcGIS Online account (My Maps in MapMaker).");
 </script>
 
