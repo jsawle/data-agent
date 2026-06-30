@@ -1,0 +1,2174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MapMaker Fieldwork — Local save POC</title>
+
+  <!-- ArcGIS Maps SDK for JavaScript — powers the live preview with the real
+       NatGeo basemap, so what you see is exactly what MapMaker will show. -->
+  <link rel="stylesheet" href="https://js.arcgis.com/4.31/esri/themes/light/main.css">
+  <script src="https://js.arcgis.com/4.31/"></script>
+
+  <style>
+    :root {
+      --esri-blue-50:  #E6F1FB;
+      --esri-blue-100: #C7EAFF;
+      --esri-blue-300: #50A7DA;
+      --esri-blue-500: #007AC2;
+      --esri-blue-700: #00619B;
+      --esri-blue-900: #042C53;
+
+      --brand-primary:      var(--esri-blue-500);
+      --brand-primary-dark: var(--esri-blue-700);
+      --brand-accent:       var(--esri-blue-300);
+      --brand-tint:         var(--esri-blue-50);
+      --brand-header-bg:    var(--esri-blue-700);
+      --brand-on-dark:      var(--esri-blue-100);
+
+      --ink:        #1a1a1a;
+      --ink-muted:  #666;
+      --hairline:   #e2e2e2;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f6f7;
+      color: var(--ink);
+      line-height: 1.5;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      background: var(--brand-header-bg);
+      border-bottom: 3px solid var(--esri-blue-300);
+      padding: 10px 24px;
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .header-left { display: flex; align-items: baseline; gap: 14px; }
+    .header-right { display: flex; align-items: center; gap: 16px; }
+    .header-title { color: white; font-size: 20px; font-weight: 500; letter-spacing: 0.5px; }
+    .header-sub { color: var(--brand-on-dark); font-size: 12px; letter-spacing: 0.5px; }
+
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+    .hbtn-primary {
+      background: #fff; color: var(--esri-blue-700);
+      border: none; border-radius: 6px;
+      padding: 8px 20px; font-size: 14px; font-weight: 700;
+      cursor: pointer; transition: opacity 0.15s ease;
+    }
+    .hbtn-primary:hover { opacity: 0.85; }
+    .hbtn-ghost {
+      background: transparent; color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.65); border-radius: 6px;
+      padding: 7px 16px; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: background 0.15s ease;
+    }
+    .hbtn-ghost:hover { background: rgba(255, 255, 255, 0.12); }
+
+    .app-main { flex: 1 1 auto; min-height: 0; display: flex; }
+    .map-area { flex: 1 1 auto; min-width: 0; position: relative; background: #eef2f5; }
+    #mapPreview { position: absolute; inset: 0; }
+
+    .overlay {
+      position: absolute; inset: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px; overflow-y: auto;
+      pointer-events: none;
+    }
+    .overlay-card { pointer-events: auto; width: 100%; max-width: 560px; }
+
+    .card {
+      background: rgba(255, 255, 255, 0.97);
+      border-radius: 8px;
+      padding: 28px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+    }
+
+    h2 { font-size: 18px; margin-bottom: 8px; color: var(--ink); }
+    .subtitle { color: var(--ink-muted); font-size: 14px; margin-bottom: 24px; }
+
+    .dropzone {
+      border: 2px dashed #c4c4c4;
+      border-radius: 8px;
+      padding: 48px 24px;
+      text-align: center;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      background: #fafafa;
+    }
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--brand-primary);
+      background: var(--brand-tint);
+    }
+    .dropzone-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+    .dropzone-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .dropzone-hint { color: #888; font-size: 14px; margin-bottom: 16px; }
+    .format-pill {
+      display: inline-block;
+      background: #f0f0f0; color: #555;
+      padding: 2px 10px; border-radius: 12px;
+      font-size: 12px; margin: 0 4px;
+    }
+
+    .btn {
+      background: var(--brand-primary); color: #fff;
+      border: none; padding: 10px 24px;
+      border-radius: 6px; font-size: 14px;
+      font-weight: 600; cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .btn:hover { background: var(--brand-primary-dark); }
+    .btn:disabled { background: #ddd; color: #999; cursor: not-allowed; }
+    .btn-secondary { background: white; color: #444; border: 1px solid #c4c4c4; }
+    .btn-secondary:hover { background: #f5f5f5; }
+    .btn-large { padding: 14px 32px; font-size: 16px; }
+    .btn-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+    .config-section { margin-bottom: 24px; }
+    .config-section h3 {
+      font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;
+      color: #888; margin-bottom: 12px;
+    }
+
+    .configure-side {
+      flex: 0 0 400px; max-width: 400px;
+      border-left: 1px solid var(--hairline);
+      background: #fff;
+      display: flex; flex-direction: column;
+      min-height: 0;
+    }
+    .side-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 20px; }
+    .configure-side h2 { font-size: 15px; }
+    .configure-side .subtitle { margin-bottom: 10px; font-size: 12.5px; }
+    .configure-side .config-section { margin-bottom: 10px; }
+    .configure-side .config-section h3 { margin-bottom: 6px; }
+    .configure-side .style-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .configure-side .style-option { padding: 6px 3px; }
+    .configure-side .style-option-icon { font-size: 16px; margin-bottom: 2px; }
+    .configure-side .style-option-name { font-size: 10.5px; }
+    .configure-side .style-description { font-size: 11.5px; padding: 5px 9px; margin-bottom: 6px; }
+    .configure-side .config-row { display: block; padding: 5px 0; }
+    .configure-side .config-label { display: block; margin-bottom: 3px; font-size: 12.5px; }
+    .configure-side .config-select { width: 100%; padding: 7px 10px; }
+    .configure-side .config-summary { margin-top: 4px; font-size: 11.5px; padding: 8px 10px; }
+    .map-preview-note { font-size: 10.5px; color: var(--ink-muted); margin-top: 8px; }
+
+    .symbol-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+    .symbol-label { flex: 0 0 48px; font-size: 13px; color: #555; }
+    .shape-options { display: flex; gap: 6px; }
+    .shape-btn {
+      width: 34px; height: 30px; border: 2px solid #ddd; border-radius: 6px;
+      background: #fff; cursor: pointer; font-size: 15px; color: #444; line-height: 1;
+      transition: border-color 0.15s ease;
+    }
+    .shape-btn:hover { border-color: var(--brand-accent); }
+    .shape-btn.selected { border-color: var(--brand-primary); background: var(--brand-tint); }
+    .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+    .swatch-btn {
+      width: 24px; height: 24px; border-radius: 50%;
+      border: 2px solid rgba(0, 0, 0, 0.15); cursor: pointer; padding: 0;
+    }
+    .swatch-btn:hover { border-color: rgba(0, 0, 0, 0.45); }
+    .swatch-btn.selected { border-color: #1a1a1a; }
+    .ramp-options { display: flex; gap: 6px; flex-wrap: wrap; }
+    .ramp-btn {
+      width: 44px; height: 22px; border-radius: 4px;
+      border: 2px solid rgba(0, 0, 0, 0.15); cursor: pointer; padding: 0;
+    }
+    .ramp-btn:hover { border-color: rgba(0, 0, 0, 0.45); }
+    .ramp-btn.selected { border-color: #1a1a1a; }
+    #sizeSlider { flex: 1; accent-color: var(--brand-primary); }
+    #sizeValue { font-size: 12px; color: #888; flex: 0 0 44px; text-align: right; }
+
+    @media (max-width: 900px) {
+      .app-main { flex-direction: column; }
+      .map-area { flex: 0 0 45vh; }
+      .configure-side { flex: 1 1 auto; max-width: none; border-left: none; border-top: 1px solid var(--hairline); }
+    }
+
+    .style-options {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .style-option {
+      flex: 1 1 0;
+      min-width: 0;
+      border: 2px solid #ddd; border-radius: 6px;
+      padding: 10px 6px; cursor: pointer;
+      transition: all 0.15s ease;
+      background: white; text-align: center;
+    }
+    .style-option:hover { border-color: var(--brand-accent); }
+    .style-option.selected {
+      border-color: var(--brand-primary);
+      background: var(--brand-tint);
+    }
+    .style-option.disabled { opacity: 0.4; cursor: not-allowed; }
+    .style-option.disabled:hover { border-color: #ddd; }
+    .style-option-icon { font-size: 20px; margin-bottom: 4px; display: block; }
+    .style-option-name {
+      font-size: 11.5px; font-weight: 600; line-height: 1.25;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .style-description {
+      font-size: 13px; color: var(--ink-muted);
+      background: var(--brand-tint);
+      border-left: 3px solid var(--brand-primary);
+      padding: 8px 12px; border-radius: 0 4px 4px 0;
+      margin-bottom: 16px;
+    }
+
+    .config-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 0; border-bottom: 1px solid #eee;
+    }
+    .config-row:last-of-type { border-bottom: none; }
+    .config-label { flex: 0 0 180px; color: #555; font-size: 14px; }
+    .config-icon { margin-right: 8px; }
+    .config-select {
+      flex: 1; padding: 8px 12px;
+      border: 1px solid #c4c4c4; border-radius: 4px;
+      background: white; font-size: 14px; cursor: pointer;
+    }
+    .config-summary {
+      color: #555; font-size: 13px;
+      padding: 12px; background: #f5f6f7;
+      border-radius: 4px; margin-top: 16px;
+    }
+
+    .progress { display: flex; align-items: center; gap: 12px; padding: 16px 0; }
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2px solid #eee; border-top-color: var(--brand-primary);
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .progress-text { color: #444; font-size: 14px; }
+    .progress-step-done { color: #888; font-size: 13px; padding: 2px 0 2px 32px; }
+    .progress-step-done::before { content: "\2713 "; color: #2a8f37; }
+
+    .result-card {
+      background: linear-gradient(180deg, var(--esri-blue-500) 0%, var(--esri-blue-700) 100%);
+      color: #fff; padding: 32px;
+      border-radius: 8px; text-align: center;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    }
+    .result-title { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+    .result-detail { font-size: 14px; margin-bottom: 24px; opacity: 0.9; }
+    .result-hint { font-size: 13px; margin-top: 16px; opacity: 0.9; }
+    .result-meta { margin-top: 12px; font-size: 12px; color: rgba(255,255,255,0.85); font-family: monospace; }
+
+    .error {
+      background: #fff4f4; border-left: 4px solid #d33;
+      padding: 16px; border-radius: 4px;
+      color: #a22; font-size: 14px;
+    }
+    .error strong { display: block; margin-bottom: 4px; }
+
+    .agent-card {
+      background: var(--brand-tint);
+      border: 1px solid var(--esri-blue-100);
+      border-left: 4px solid var(--brand-primary);
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .agent-label {
+      font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--brand-primary-dark);
+      font-weight: 700; margin-bottom: 10px;
+    }
+    .agent-message { font-size: 15px; line-height: 1.6; margin-bottom: 16px; color: #333; }
+    .agent-reply-input {
+      width: 100%; padding: 10px 12px;
+      border: 1px solid var(--esri-blue-100); border-radius: 6px;
+      font-size: 14px; margin-bottom: 12px; background: white;
+    }
+    .agent-reply-input:focus { outline: none; border-color: var(--brand-primary); }
+    .agent-progress { display: flex; align-items: center; gap: 12px; }
+    .agent-progress .progress-text { color: var(--brand-primary-dark); }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-title">MapMaker</div>
+    <div class="header-sub">fieldwork data upload</div>
+  </div>
+  <div class="header-right">
+    <div class="header-actions hidden" id="headerActions">
+      <button id="restartBtn" class="hbtn-ghost">Start over</button>
+      <button id="publishBtn" class="hbtn-primary">Save map file</button>
+    </div>
+  </div>
+</div>
+
+<div class="app-main">
+
+  <div class="map-area">
+    <div id="mapPreview"></div>
+
+    <div id="stage-upload" class="overlay">
+      <div class="card overlay-card">
+        <h2>Upload your data and see it in MapMaker</h2>
+        <p class="subtitle">Drop a CSV with latitude and longitude columns. We'll do the rest.</p>
+
+        <div id="dropZone" class="dropzone">
+          <div class="dropzone-icon">&#128205;</div>
+          <div class="dropzone-title">Drop your spreadsheet here</div>
+          <div class="dropzone-hint">or click to browse</div>
+          <div><span class="format-pill">CSV</span></div>
+          <input type="file" id="fileInput" accept=".csv" style="display: none;">
+        </div>
+
+        <div class="btn-row" style="margin-top: 20px;">
+          <button id="sampleBtn" class="btn btn-secondary">Try a sample</button>
+          <span style="color: #888; font-size: 13px;">No file? Click for a tree-survey demo.</span>
+        </div>
+
+        <p style="color: #888; font-size: 12px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #eee;">
+          Up to 1000 rows per map. Your map is saved as a <code>.mmap</code> file on this device &mdash; no account or sign-in. Open it in the MapMaker / Atlas POC under <strong>Open map &rarr; My Maps</strong>.
+        </p>
+      </div>
+    </div>
+
+    <div id="stage-agent" class="overlay hidden">
+      <div class="card overlay-card">
+        <div class="agent-card" id="agentCard"></div>
+        <div class="btn-row">
+          <button id="agentStartOverBtn" class="btn btn-secondary">Start over</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="stage-toolarge" class="overlay hidden">
+      <div class="card overlay-card">
+        <h2>This file is a bit large</h2>
+        <p class="subtitle" id="toolargeSubtitle"></p>
+        <div class="btn-row" style="margin-top: 20px;">
+          <button id="truncateBtn" class="btn btn-large">Map first 1000 rows</button>
+          <button id="toolargeRestartBtn" class="btn btn-secondary">Try a different file</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="stage-publishing" class="overlay hidden">
+      <div class="card overlay-card">
+        <h2>Reading your data&hellip;</h2>
+        <p class="subtitle">This usually takes about 5 seconds.</p>
+        <div id="progressList"></div>
+      </div>
+    </div>
+
+    <div id="stage-result" class="overlay hidden">
+      <div class="overlay-card" style="max-width: 480px;">
+        <div class="result-card">
+          <div class="result-title">Saved to your device &#127881;</div>
+          <div class="result-detail" id="resultDetail"></div>
+          <div class="result-hint">Open it in the MapMaker / Atlas POC: <strong>Open map &rarr; My Maps</strong>, then choose this file.</div>
+          <div class="result-meta" id="resultMeta"></div>
+        </div>
+        <div class="btn-row" style="margin-top: 16px; justify-content: center;">
+          <button id="anotherBtn" class="btn btn-secondary">Map another file</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="errorBox" class="overlay hidden">
+      <div class="card overlay-card">
+        <div class="error">
+          <strong>Something went wrong</strong>
+          <span id="errorText"></span>
+        </div>
+        <div class="btn-row" style="margin-top: 16px;">
+          <button id="errorRestartBtn" class="btn btn-secondary">Try again</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <aside id="stage-configure" class="configure-side hidden">
+    <div class="side-scroll">
+      <h2>Looks good. Here's how we'll map it.</h2>
+      <p class="subtitle" id="configureSubtitle"></p>
+
+      <div class="config-section">
+        <h3>Map style</h3>
+        <div class="style-options" id="styleOptions"></div>
+        <div class="style-description" id="styleDescription"></div>
+      </div>
+
+      <div class="config-section" id="fieldsSection">
+        <h3>Fields</h3>
+        <div id="fieldsContainer"></div>
+      </div>
+
+      <div class="config-section" id="symbolSection">
+        <h3>Points</h3>
+        <div class="symbol-row" id="shapeRow">
+          <span class="symbol-label">Shape</span>
+          <div class="shape-options" id="shapeOptions"></div>
+        </div>
+        <div class="symbol-row" id="colorRow">
+          <span class="symbol-label">Color</span>
+          <div class="swatches" id="colorSwatches"></div>
+        </div>
+        <div class="symbol-row" id="rampRow">
+          <span class="symbol-label">Ramp</span>
+          <div class="ramp-options" id="rampOptions"></div>
+        </div>
+        <div class="symbol-row">
+          <span class="symbol-label">Size</span>
+          <input type="range" id="sizeSlider" min="6" max="28" step="1" value="12">
+          <span id="sizeValue">12 px</span>
+        </div>
+      </div>
+
+      <div class="config-summary" id="configSummary"></div>
+      <div class="map-preview-note" id="mapPreviewNote"></div>
+    </div>
+  </aside>
+
+</div>
+
+<script>
+  // -----------------------------------------------------------------------
+  // Configuration
+  // -----------------------------------------------------------------------
+  // This build saves the map to a LOCAL .mmap file — the same format the
+  // local MapMaker / Atlas POC opens (Open map -> My Maps). There is no
+  // sign-in and no ArcGIS Online account involved in saving.
+  //
+  // NOTE: the CSV is still parsed by ArcGIS Online's ANONYMOUS analyze/generate
+  // endpoints (no account, but it does need internet), and the live preview
+  // loads the NatGeo basemap online. So this variant is "no account", not yet
+  // "fully offline" — the parse step is the piece to replace for true offline.
+
+  // Copilot Studio agent endpoint (CSV cleanup — unchanged from agent build)
+  const AGENT_TOKEN_ENDPOINT = "https://68c61fd12475ebdd804374cf052e0d.0e.environment.api.powerplatform.com/powervirtualagents/botsbyschema/cr86a_Fieldworkdata/directline/token?api-version=2022-03-01-preview";
+  const AGENT_TIMEOUT_MS = 45000;
+
+  // MapMaker's National Geographic Style basemap is itself a web map item.
+  // We fetch that item's baseMap definition at runtime so the live preview
+  // matches MapMaker exactly.
+  const NATGEO_BASEMAP_ITEM_ID = "a82ff7ce1c3a493f9d82aa89f5a1ddcf";
+
+  // Fallback only — used if the runtime fetch fails.
+  const NATGEO_BASEMAP_FALLBACK = {
+    title: "National Geographic Style",
+    baseMapLayers: [
+      { id: "World_Hillshade", title: "World Hillshade", url: "https://services.arcgisonline.com/arcgis/rest/services/Elevation/World_Hillshade/MapServer", layerType: "ArcGISTiledMapServiceLayer", itemId: "1b243539f4514b6ba35e7d995890db1d", visibility: true, opacity: 1 },
+      { id: "NatGeoStyleBase", title: "National Geographic Style Base", url: "https://tiles.arcgis.com/tiles/P3ePLMYs2RVChkJx/arcgis/rest/services/NatGeoStyleBase/MapServer", layerType: "ArcGISTiledMapServiceLayer", itemId: "f9a070ff745b4d368b312eb647c53a4e", visibility: true, opacity: 1 },
+      { id: "NatGeoNoLabel", title: "National Geographic Style (no label)", styleUrl: "https://www.arcgis.com/sharing/rest/content/items/be90e1f3c0164cd0adc7920e1679c65f/resources/styles/root.json", itemId: "be90e1f3c0164cd0adc7920e1679c65f", layerType: "VectorTileLayer" }
+    ]
+  };
+
+  let _natGeoBasemapCache = null;
+
+  async function getNatGeoBasemap() {
+    if (_natGeoBasemapCache) return _natGeoBasemapCache;
+    try {
+      const url = `https://www.arcgis.com/sharing/rest/content/items/${NATGEO_BASEMAP_ITEM_ID}/data?f=json`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const data = await r.json();
+      if (data && data.baseMap && Array.isArray(data.baseMap.baseMapLayers) && data.baseMap.baseMapLayers.length) {
+        _natGeoBasemapCache = data.baseMap;
+        log("basemap: loaded NatGeo basemap from item " + NATGEO_BASEMAP_ITEM_ID, "ok");
+        return _natGeoBasemapCache;
+      }
+      throw new Error("item data had no usable baseMap block");
+    } catch (e) {
+      log("basemap: could not fetch NatGeo basemap item (" + e.message + ") — using fallback", "err");
+      _natGeoBasemapCache = NATGEO_BASEMAP_FALLBACK;
+      return _natGeoBasemapCache;
+    }
+  }
+
+  // Categorical palette — used by "Map by type" (unique-value renderer).
+  const PALETTE = [
+    [  0, 122, 194, 255],
+    [255, 170,  0, 255],
+    [ 76, 175,  80, 255],
+    [216,  86,  48, 255],
+    [142,  68, 173, 255],
+    [  0, 168, 168, 255],
+    [233, 113, 184, 255],
+    [121, 121, 121, 255]
+  ];
+
+  const NUMERIC_TYPES = new Set(["esriFieldTypeInteger", "esriFieldTypeDouble", "esriFieldTypeSmallInteger"]);
+  const STRING_TYPES = new Set(["esriFieldTypeString"]);
+  const COORD_NAMES = new Set(["latitude", "longitude", "lat", "lon", "lng", "x", "y"]);
+  const OID_NAMES = new Set(["ObjectId", "OBJECTID", "FID"]);
+
+  const ANALYZE_URL = "https://www.arcgis.com/sharing/rest/content/features/analyze";
+  const GENERATE_URL = "https://www.arcgis.com/sharing/rest/content/features/generate";
+
+  const NONE_VALUE = "__none__";
+  const MAX_ROWS = 1000;
+
+  const STYLES = [
+    { id: "simple", name: "Map locations", icon: "📍", hint: "Just points on a map",
+      requires: {}, fields: ["label"] },
+    { id: "categorical", name: "Map by type", icon: "🏷️", hint: "e.g. mapping tree species, sentiment, qualitative data, etc.",
+      requires: { minCategorical: 1 }, fields: ["color", "label"] },
+    { id: "graduated", name: "Map by size", icon: "📏", hint: "e.g. height of a tree, traffic counts, noise in Db, etc.",
+      requires: { minNumeric: 1 }, fields: ["size", "label"] },
+    { id: "numeric_color_size", name: "Map by color & size", icon: "💠", hint: "two numbers together — e.g. earthquake depth as colour, magnitude as size",
+      requires: { minNumeric: 2 }, fields: ["color", "size", "label"] },
+    { id: "categorical_size", name: "Map by type & size", icon: "🎨", hint: "e.g. tree height as size, species as colour",
+      requires: { minCategorical: 1, minNumeric: 1 }, fields: ["color", "size", "label"] },
+    { id: "pie_chart", name: "Pie charts", icon: "🥧", hint: "e.g. litter surveys, plant species in a quadrat, traffic counts",
+      requires: { minNumeric: 3 }, fields: ["label"] },
+  ];
+
+  const FIELD_DEFS = {
+    color: { label: "Color points by", icon: "🎨", source: "color" },
+    size:  { label: "Size points by",  icon: "📏", source: "numeric" },
+    label: { label: "Label points with", icon: "🏷️", source: "label" },
+  };
+
+  const SAMPLE_CSV = `Species,DBH_cm,Longitude,Latitude
+Coast Live Oak,45,-117.1656,32.7114
+Eucalyptus,80,-117.1626,32.7093
+Jacaranda,30,-117.1601,32.7104
+Palm,25,-117.1592,32.7114
+Coast Live Oak,55,-117.1628,32.7114
+Eucalyptus,90,-117.1601,32.7083
+Jacaranda,35,-117.1610,32.7125
+Palm,20,-117.1610,32.7094
+Coast Live Oak,60,-117.1583,32.7083
+Eucalyptus,75,-117.1620,32.7104
+Magnolia,40,-117.1638,32.7104
+Palm,28,-117.1583,32.7104
+Coast Live Oak,50,-117.1638,32.7125
+Coral Tree,35,-117.1591,32.7125
+Eucalyptus,85,-117.1610,32.7114`;
+
+  const state = {
+    csvBlob: null, displayName: null, fcLayer: null,
+    features: [], fields: [], numeric: [], categorical: [],
+    style: null, fieldChoices: { color: null, size: null, label: null },
+    symbolChoices: { shape: "esriSMSCircle", color: [0, 122, 194], size: 12, ramp: "blue" },
+    isSample: false,
+  };
+
+  const stages = {
+    upload:     document.getElementById("stage-upload"),
+    agent:      document.getElementById("stage-agent"),
+    configure:  document.getElementById("stage-configure"),
+    toolarge:   document.getElementById("stage-toolarge"),
+    publishing: document.getElementById("stage-publishing"),
+    result:     document.getElementById("stage-result"),
+    error:      document.getElementById("errorBox"),
+  };
+
+  function showStage(name) {
+    Object.entries(stages).forEach(([k, el]) => {
+      if (k === name) el.classList.remove("hidden");
+      else el.classList.add("hidden");
+    });
+    document.getElementById("headerActions").classList.toggle("hidden", name !== "configure");
+  }
+
+  function log(msg, cls = "") {
+    console.log("[fieldwork] " + msg);
+  }
+  function escapeHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // ----------------------------------------------------------------------
+  // Local check
+  // ----------------------------------------------------------------------
+  function splitCsvLine(line) {
+    const cells = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+        else inQuotes = !inQuotes;
+      } else if (ch === "," && !inQuotes) {
+        cells.push(cur);
+        cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    cells.push(cur);
+    return cells;
+  }
+
+  const CLEAN_COORD = /^-?\d+(\.\d+)?$/;
+
+  async function localCheckCsvBlob(csvBlob) {
+    const text = await csvBlob.text();
+    if (!text || !text.trim()) return { clean: false, reason: "empty file" };
+
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length < 2) return { clean: false, reason: "fewer than 2 non-empty lines" };
+
+    const headerLine = lines[0];
+    const commas = (headerLine.match(/,/g) || []).length;
+    const semis  = (headerLine.match(/;/g) || []).length;
+    const tabs   = (headerLine.match(/\t/g) || []).length;
+    if (semis > commas || tabs > commas) {
+      return { clean: false, reason: `delimiter looks like ${semis > commas ? "semicolon" : "tab"}` };
+    }
+
+    const headers = splitCsvLine(headerLine).map(h => h.trim().toLowerCase());
+    const latNames = ["lat", "latitude", "y", "y_coord", "ycoord"];
+    const lonNames = ["lon", "long", "longitude", "lng", "x", "x_coord", "xcoord"];
+    const latIdx = headers.findIndex(h => latNames.includes(h));
+    const lonIdx = headers.findIndex(h => lonNames.includes(h));
+    if (latIdx === -1 || lonIdx === -1) {
+      return { clean: false, reason: "no recognised lat/lon column headers" };
+    }
+
+    let badRows = 0;
+    let firstBadLine = null;
+    for (let i = 1; i < lines.length; i++) {
+      const cols = splitCsvLine(lines[i]);
+      const latVal = (cols[latIdx] || "").trim();
+      const lonVal = (cols[lonIdx] || "").trim();
+      if (!CLEAN_COORD.test(latVal) || !CLEAN_COORD.test(lonVal)) {
+        badRows++;
+        if (firstBadLine === null) firstBadLine = i + 1;
+      }
+    }
+
+    if (badRows > 0) {
+      return {
+        clean: false,
+        reason: `${badRows} row${badRows === 1 ? "" : "s"} have coordinate cells that aren't plain decimals (first at line ${firstBadLine})`
+      };
+    }
+
+    return { clean: true, reason: `all ${lines.length - 1} rows have clean decimal coordinates` };
+  }
+
+  // ----------------------------------------------------------------------
+  // Agent call via Direct Line REST
+  // ----------------------------------------------------------------------
+  async function callFieldworkAgent(csvText) {
+    log("agent: requesting Direct Line token…", "agent");
+    const tokenRes = await fetch(AGENT_TOKEN_ENDPOINT);
+    if (!tokenRes.ok) throw new Error(`Agent token HTTP ${tokenRes.status}`);
+    const { token } = await tokenRes.json();
+    log("agent: token received", "agent");
+
+    const convRes = await fetch("https://directline.botframework.com/v3/directline/conversations", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }
+    });
+    if (!convRes.ok) throw new Error(`Agent conversation HTTP ${convRes.status}`);
+    const { conversationId } = await convRes.json();
+    log("agent: conversation " + conversationId.slice(0, 10) + "…", "agent");
+
+    const messageText = `Here is the CSV the teacher uploaded:\n\n${csvText}`;
+    const sendRes = await fetch(
+      `https://directline.botframework.com/v3/directline/conversations/${conversationId}/activities`,
+      {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "message", from: { id: "user" }, text: messageText })
+      }
+    );
+    if (!sendRes.ok) throw new Error(`Agent send HTTP ${sendRes.status}`);
+    log("agent: message sent (" + messageText.length + " chars), waiting…", "agent");
+
+    const start = Date.now();
+    let watermark = null;
+    while (Date.now() - start < AGENT_TIMEOUT_MS) {
+      await sleep(800);
+      const url = `https://directline.botframework.com/v3/directline/conversations/${conversationId}/activities${watermark ? "?watermark=" + watermark : ""}`;
+      const actRes = await fetch(url, { headers: { "Authorization": "Bearer " + token } });
+      if (!actRes.ok) continue;
+      const data = await actRes.json();
+      watermark = data.watermark;
+      const botMsg = (data.activities || []).find(
+        a => a.type === "message" && a.from && a.from.role === "bot" && a.text
+      );
+      if (botMsg) {
+        log("agent: reply received (" + botMsg.text.length + " chars)", "agent");
+        return parseAgentJson(botMsg.text);
+      }
+    }
+    throw new Error("Agent timed out after " + (AGENT_TIMEOUT_MS / 1000) + "s");
+  }
+
+  function parseAgentJson(text) {
+    let s = text.trim()
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/, "")
+      .replace(/```\s*$/, "");
+    const first = s.indexOf("{"), last = s.lastIndexOf("}");
+    if (first !== -1 && last !== -1) s = s.slice(first, last + 1);
+    return JSON.parse(s);
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // ----------------------------------------------------------------------
+  // Agent stage UI
+  // ----------------------------------------------------------------------
+  function renderAgentBusy(message) {
+    document.getElementById("agentCard").innerHTML = `
+      <div class="agent-label">Fieldwork assistant</div>
+      <div class="agent-progress">
+        <div class="spinner"></div>
+        <div class="progress-text">${escapeHtml(message)}</div>
+      </div>
+    `;
+    showStage("agent");
+  }
+
+  function renderAgentMessage({ message, primaryLabel, onPrimary, secondaryLabel, onSecondary, extraLabel, onExtra, replyPlaceholder, onReply }) {
+    const replyInput = replyPlaceholder
+      ? `<input class="agent-reply-input" type="text" id="agentReplyInput" placeholder="${escapeHtml(replyPlaceholder)}">`
+      : "";
+    const secondary = secondaryLabel
+      ? `<button id="agentSecondaryBtn" class="btn btn-secondary">${escapeHtml(secondaryLabel)}</button>`
+      : "";
+    const extra = extraLabel
+      ? `<button id="agentExtraBtn" class="btn btn-secondary">${escapeHtml(extraLabel)}</button>`
+      : "";
+
+    document.getElementById("agentCard").innerHTML = `
+      <div class="agent-label">Fieldwork assistant</div>
+      <div class="agent-message">${escapeHtml(message)}</div>
+      ${replyInput}
+      <div class="btn-row">
+        <button id="agentPrimaryBtn" class="btn">${escapeHtml(primaryLabel)}</button>
+        ${secondary}
+        ${extra}
+      </div>
+    `;
+    showStage("agent");
+
+    document.getElementById("agentPrimaryBtn").addEventListener("click", onPrimary);
+    if (secondaryLabel) document.getElementById("agentSecondaryBtn").addEventListener("click", onSecondary);
+    if (extraLabel) document.getElementById("agentExtraBtn").addEventListener("click", onExtra);
+    if (replyPlaceholder) {
+      const input = document.getElementById("agentReplyInput");
+      input.focus();
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          const v = input.value.trim();
+          if (v) onReply(v);
+        }
+      });
+    }
+  }
+
+  // Download a string as a file (cleaned CSV inspection, and the .mmap save fallback).
+  function downloadText(filename, text, mime) {
+    const blob = new Blob([text], { type: mime || "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ----------------------------------------------------------------------
+  // Entry point
+  // ----------------------------------------------------------------------
+  async function handleIncomingFile(csvBlob, displayName) {
+    log("file received: " + displayName + " (" + csvBlob.size + " bytes)");
+    state.csvBlob = csvBlob;
+    state.displayName = displayName;
+
+    const check = await localCheckCsvBlob(csvBlob);
+    log("local check: " + (check.clean ? "CLEAN" : "needs agent") + " — " + check.reason,
+        check.clean ? "ok" : "");
+
+    if (check.clean) {
+      const rounded = await roundCoordinatesInCsv(csvBlob);
+      loadAndAnalyze(rounded, displayName);
+    } else {
+      runAgentFlow(csvBlob, displayName);
+    }
+  }
+
+  // Round latitude/longitude columns to 5 decimal places (~1m).
+  async function roundCoordinatesInCsv(csvBlob) {
+    const text = await csvBlob.text();
+    const lines = text.replace(/\r\n/g, "\n").split("\n");
+    if (lines.length < 2) return csvBlob;
+
+    const header = splitCsvLine(lines[0]).map(h => h.trim());
+    const latI = header.findIndex(h => ["latitude", "lat"].includes(h.toLowerCase()));
+    const lonI = header.findIndex(h => ["longitude", "lon", "long", "lng"].includes(h.toLowerCase()));
+    if (latI === -1 || lonI === -1) return csvBlob;
+
+    let changed = 0;
+    const out = [lines[0]];
+    for (let i = 1; i < lines.length; i++) {
+      if (lines[i].trim() === "") { out.push(lines[i]); continue; }
+      const cells = splitCsvLine(lines[i]);
+      const lat = parseFloat(cells[latI]);
+      const lon = parseFloat(cells[lonI]);
+      if (isFinite(lat)) {
+        const r = String(Math.round(lat * 1e5) / 1e5);
+        if (r !== String(cells[latI]).trim()) changed++;
+        cells[latI] = r;
+      }
+      if (isFinite(lon)) {
+        cells[lonI] = String(Math.round(lon * 1e5) / 1e5);
+      }
+      out.push(cells.map(c => {
+        const s = String(c == null ? "" : c);
+        return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      }).join(","));
+    }
+    if (changed > 0) log("rounded coordinates on " + changed + " row(s) to 5 dp", "ok");
+    return new Blob([out.join("\n")], { type: "text/csv" });
+  }
+
+  async function runAgentFlow(csvBlob, displayName) {
+    renderAgentBusy("Looking at your data…");
+    try {
+      const csvText = await csvBlob.text();
+      const result = await callFieldworkAgent(csvText);
+      log("agent result: status=" + result.status, "ok");
+
+      if (result.status === "fixed") {
+        const fixes = Array.isArray(result.fixes) ? result.fixes : [];
+        log("agent: " + fixes.length + " fix operation(s) returned", "agent");
+        fixes.forEach((fx, i) => log("  fix " + (i + 1) + ": " + JSON.stringify(fx), "agent"));
+
+        let applied;
+        try {
+          applied = applyFixes(csvText, fixes);
+        } catch (fixErr) {
+          log("applyFixes failed: " + fixErr.message, "err");
+          renderAgentMessage({
+            message: "I worked out what was wrong with your file, but couldn't apply the fix automatically. You can try mapping it as-is, or start over.",
+            primaryLabel: "Try anyway",
+            onPrimary: () => loadAndAnalyze(csvBlob, displayName),
+            secondaryLabel: "Start over",
+            onSecondary: reset
+          });
+          return;
+        }
+
+        log("applyFixes: " + applied.rowsKept + " rows kept, " + applied.rowsDropped + " dropped", "ok");
+        log("--- cleaned CSV (first 600 chars) ---", "agent");
+        log(applied.csv.slice(0, 600), "");
+        log("--- cleaned CSV total length: " + applied.csv.length + " chars, " +
+            (applied.csv.split("\n").length) + " lines ---", "agent");
+
+        const note = result.notes || "Cleaned up your data.";
+        const human = applied.rowsDropped > 0
+          ? `${note} Mapping ${applied.rowsKept} rows (${applied.rowsDropped} skipped).`
+          : `${note} Mapping ${applied.rowsKept} rows.`;
+
+        renderAgentMessage({
+          message: human,
+          primaryLabel: "Map it",
+          onPrimary: () => {
+            const cleanedBlob = new Blob([applied.csv], { type: "text/csv" });
+            loadAndAnalyze(cleanedBlob, displayName);
+          },
+          secondaryLabel: "Start over",
+          onSecondary: reset,
+          extraLabel: "Download cleaned CSV",
+          onExtra: () => {
+            const base = displayName.replace(/\.csv$/i, "");
+            downloadText(base + "_cleaned.csv", applied.csv);
+            log("downloaded cleaned CSV for inspection", "ok");
+          }
+        });
+      } else if (result.status === "needs_input") {
+        renderAgentMessage({
+          message: result.question || "I need a bit more information about your file.",
+          primaryLabel: "Start over",
+          onPrimary: reset,
+          replyPlaceholder: "Type your answer and press Enter…",
+          onReply: (reply) => {
+            log("agent: teacher replied — re-asking with context", "agent");
+            const csvWithReply = `${csvText}\n\n[Teacher reply]: ${reply}`;
+            const replyBlob = new Blob([csvWithReply], { type: "text/csv" });
+            runAgentFlow(replyBlob, displayName);
+          }
+        });
+      } else {
+        throw new Error("Agent returned an unexpected response shape.");
+      }
+    } catch (err) {
+      log("agent call failed: " + err.message, "err");
+      renderAgentMessage({
+        message: "I couldn't reach the assistant. You can try mapping the file as-is, or start over.",
+        primaryLabel: "Try anyway",
+        onPrimary: () => loadAndAnalyze(csvBlob, displayName),
+        secondaryLabel: "Start over",
+        onSecondary: reset
+      });
+    }
+  }
+
+  // ----------------------------------------------------------------------
+  // applyFixes — executes the agent's fix list against the CSV locally.
+  // ----------------------------------------------------------------------
+  function applyFixes(csvText, fixes) {
+    const byOp = (name) => fixes.filter(f => f && f.op === name);
+    const firstOp = (name) => byOp(name)[0] || null;
+
+    function parseRows(text, delimiter) {
+      const lines = text.replace(/\r\n/g, "\n").split("\n");
+      return lines.map((line, idx) => ({
+        origLine: idx + 1,
+        cells: splitLine(line, delimiter),
+        raw: line
+      }));
+    }
+
+    function splitLine(line, delimiter) {
+      if (delimiter === ",") return splitCsvLine(line);
+      if (delimiter === "tab") return line.split("\t");
+      return line.split(delimiter);
+    }
+
+    function cellsToCsvLine(cells) {
+      return cells.map(c => {
+        const s = String(c == null ? "" : c);
+        return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      }).join(",");
+    }
+
+    const delimOp = firstOp("set_delimiter");
+    const delimiter = delimOp ? (delimOp.from === "tab" ? "tab" : delimOp.from) : ",";
+
+    let rows = parseRows(csvText, delimiter);
+
+    const headerOp = firstOp("set_header_row");
+    let headerLineNo = 1;
+    if (headerOp && Number.isInteger(headerOp.line) && headerOp.line >= 1) {
+      headerLineNo = headerOp.line;
+    } else {
+      const firstNonBlank = rows.find(r => r.cells.some(c => String(c).trim() !== ""));
+      headerLineNo = firstNonBlank ? firstNonBlank.origLine : 1;
+    }
+    let headerRow = rows.find(r => r.origLine === headerLineNo);
+    if (!headerRow) throw new Error("header row line " + headerLineNo + " not found");
+    let dataRows = rows.filter(r => r.origLine > headerLineNo);
+
+    if (byOp("strip_blank_rows").length > 0) {
+      dataRows = dataRows.filter(r => r.cells.some(c => String(c).trim() !== ""));
+    } else {
+      dataRows = dataRows.filter(r => r.raw.trim() !== "");
+    }
+
+    let header = headerRow.cells.slice();
+
+    if (byOp("drop_empty_columns").length > 0) {
+      const keep = [];
+      for (let c = 0; c < header.length; c++) {
+        const headerBlank = String(header[c] || "").trim() === "";
+        const allDataBlank = dataRows.every(r => String(r.cells[c] == null ? "" : r.cells[c]).trim() === "");
+        if (!(headerBlank && allDataBlank)) keep.push(c);
+      }
+      header = keep.map(c => header[c]);
+      dataRows = dataRows.map(r => ({ ...r, cells: keep.map(c => r.cells[c]) }));
+    }
+
+    for (const op of byOp("rename_columns")) {
+      if (op.map && typeof op.map === "object") {
+        header = header.map(h => {
+          const trimmed = String(h).trim();
+          return Object.prototype.hasOwnProperty.call(op.map, trimmed) ? op.map[trimmed] : h;
+        });
+      }
+    }
+
+    const colIndex = (name) => header.findIndex(h => String(h).trim().toLowerCase() === String(name).trim().toLowerCase());
+
+    for (const op of byOp("swap_columns")) {
+      const ai = colIndex(op.a), bi = colIndex(op.b);
+      if (ai !== -1 && bi !== -1) {
+        for (const r of dataRows) {
+          const tmp = r.cells[ai];
+          r.cells[ai] = r.cells[bi];
+          r.cells[bi] = tmp;
+        }
+      }
+    }
+
+    for (const op of byOp("convert_dms")) {
+      const ci = colIndex(op.column);
+      if (ci !== -1) {
+        for (const r of dataRows) {
+          const v = dmsToDecimal(r.cells[ci]);
+          if (v !== null) r.cells[ci] = String(v);
+        }
+      }
+    }
+
+    for (const op of byOp("convert_decimal_comma")) {
+      const ci = colIndex(op.column);
+      if (ci !== -1) {
+        for (const r of dataRows) {
+          const s = String(r.cells[ci] == null ? "" : r.cells[ci]).trim();
+          if (/^-?\d+,\d+$/.test(s)) r.cells[ci] = s.replace(",", ".");
+        }
+      }
+    }
+
+    for (const op of byOp("clean_column")) {
+      const ci = colIndex(op.column);
+      if (ci === -1) {
+        log("applyFixes: clean_column target column '" + op.column + "' not found", "err");
+        continue;
+      }
+      const problem = String(op.problem || "").trim();
+      for (const r of dataRows) {
+        let s = String(r.cells[ci] == null ? "" : r.cells[ci]);
+        switch (problem) {
+          case "trailing_comma":
+          case "trailing_chars":
+            s = s.replace(/^[\s,;]+/, "").replace(/[\s,;]+$/, "");
+            break;
+          case "internal_space":
+            s = s.replace(/\s+/g, "");
+            break;
+          case "label_prefix":
+            s = s.replace(/^[A-Za-z .:_-]*?(-?\d)/, "$1");
+            break;
+          case "whitespace":
+            s = s.trim();
+            break;
+          default:
+            s = s.trim();
+            log("applyFixes: clean_column unknown problem '" + problem + "' — trimmed only", "err");
+        }
+        r.cells[ci] = s;
+      }
+    }
+
+    header = header.map(h => String(h).trim());
+
+    const CLEAN_NUM = /^-?\d+(\.\d+)?$/;
+    const latI = header.findIndex(h => ["latitude", "lat"].includes(h.toLowerCase()));
+    const lonI = header.findIndex(h => ["longitude", "lon", "long", "lng"].includes(h.toLowerCase()));
+
+    let rowsDropped = 0;
+
+    if (latI !== -1 && lonI !== -1) {
+      const before = dataRows.length;
+      dataRows = dataRows.filter(r => {
+        const lat = String(r.cells[latI] == null ? "" : r.cells[latI]).trim();
+        const lon = String(r.cells[lonI] == null ? "" : r.cells[lonI]).trim();
+        return CLEAN_NUM.test(lat) && CLEAN_NUM.test(lon);
+      });
+      rowsDropped = before - dataRows.length;
+      if (rowsDropped > 0) {
+        log("applyFixes: dropped " + rowsDropped + " row(s) with unparseable coordinates", "err");
+      }
+
+      for (const r of dataRows) {
+        const lat = parseFloat(r.cells[latI]);
+        const lon = parseFloat(r.cells[lonI]);
+        if (isFinite(lat)) r.cells[latI] = String(Math.round(lat * 1e5) / 1e5);
+        if (isFinite(lon)) r.cells[lonI] = String(Math.round(lon * 1e5) / 1e5);
+      }
+    } else {
+      log("applyFixes: could not find latitude/longitude columns to validate — skipping coordinate check", "err");
+    }
+
+    const out = [cellsToCsvLine(header)];
+    for (const r of dataRows) out.push(cellsToCsvLine(r.cells));
+
+    return {
+      csv: out.join("\n"),
+      rowsKept: dataRows.length,
+      rowsDropped: rowsDropped
+    };
+  }
+
+  function dmsToDecimal(value) {
+    if (value == null) return null;
+    let s = String(value).trim();
+    if (s === "") return null;
+
+    if (/^-?\d+(\.\d+)?$/.test(s)) return null;
+
+    let sign = 1;
+    const hemi = s.match(/[NSEWnsew]/);
+    if (hemi) {
+      const h = hemi[0].toUpperCase();
+      if (h === "S" || h === "W") sign = -1;
+    }
+    if (s.trim().startsWith("-")) sign = -1;
+
+    const nums = s.match(/\d+(\.\d+)?/g);
+    if (!nums || nums.length === 0) return null;
+
+    const deg = parseFloat(nums[0]) || 0;
+    const min = nums.length > 1 ? parseFloat(nums[1]) || 0 : 0;
+    const sec = nums.length > 2 ? parseFloat(nums[2]) || 0 : 0;
+
+    const decimal = sign * (deg + min / 60 + sec / 3600);
+    if (!isFinite(decimal)) return null;
+    return Math.round(decimal * 1e7) / 1e7;
+  }
+
+  // =====================================================================
+  // AGOL analyze/generate (anonymous — parses the CSV into features)
+  // =====================================================================
+
+  async function analyzeCSV(csvBlob) {
+    const fd = new FormData();
+    fd.append("f", "json");
+    fd.append("fileType", "csv");
+    fd.append("analyzeParameters", JSON.stringify({ enableGlobalGeocoding: false }));
+    fd.append("file", csvBlob, "upload.csv");
+    const r = await fetch(ANALYZE_URL, { method: "POST", body: fd });
+    if (!r.ok) throw new Error(`AGOL analyze HTTP ${r.status}`);
+    const data = await r.json();
+    if (data.error) throw new Error(`AGOL analyze: ${data.error.message || JSON.stringify(data.error)}`);
+    return data.publishParameters;
+  }
+
+  async function generateFeatures(csvBlob, publishParameters) {
+    const fd = new FormData();
+    fd.append("f", "json");
+    fd.append("fileType", "csv");
+    fd.append("publishParameters", JSON.stringify(publishParameters));
+    fd.append("file", csvBlob, "upload.csv");
+    const r = await fetch(GENERATE_URL, { method: "POST", body: fd });
+    if (!r.ok) throw new Error(`AGOL generate HTTP ${r.status}`);
+    const data = await r.json();
+    if (data.error) throw new Error(`AGOL generate: ${data.error.message || JSON.stringify(data.error)}`);
+    return data.featureCollection.layers[0];
+  }
+
+  function classifyColumns(fields, features) {
+    const numeric = [];
+    const categorical = [];
+    for (const f of fields) {
+      if (OID_NAMES.has(f.name)) continue;
+      if (COORD_NAMES.has(f.name.toLowerCase())) continue;
+      if (NUMERIC_TYPES.has(f.type)) {
+        numeric.push(f.name);
+      } else if (STRING_TYPES.has(f.type)) {
+        const unique = new Set();
+        for (const feat of features) {
+          const v = feat.attributes[f.name];
+          if (v !== null && v !== undefined && v !== "") unique.add(v);
+        }
+        if (unique.size >= 2 && unique.size <= 12) categorical.push(f.name);
+      }
+    }
+    return { numeric, categorical };
+  }
+
+  function isStyleAvailable(style, numeric, categorical) {
+    const req = style.requires;
+    if (req.minNumeric && numeric.length < req.minNumeric) return false;
+    if (req.minCategorical && categorical.length < req.minCategorical) return false;
+    return true;
+  }
+
+  const AUTO_PICK_ORDER = ["categorical_size", "categorical", "graduated", "simple"];
+
+  function pickAutoStyle(numeric, categorical) {
+    for (const id of AUTO_PICK_ORDER) {
+      const style = STYLES.find(s => s.id === id);
+      if (style && isStyleAvailable(style, numeric, categorical)) return style;
+    }
+    return STYLES.find(s => s.id === "simple");
+  }
+
+  function pickAutoFields(style, numeric, categorical) {
+    const choices = { color: null, size: null, label: null };
+    if (style.id === "numeric_color_size") {
+      choices.color = numeric[0] || null;
+      choices.size  = numeric[1] || numeric[0] || null;
+    } else {
+      if (style.fields.includes("color")) choices.color = categorical[0] || null;
+      if (style.fields.includes("size"))  choices.size  = numeric[0] || null;
+    }
+    if (style.fields.includes("label")) choices.label = categorical[0] || numeric[0] || null;
+    return choices;
+  }
+
+  const POINT_FILL_ALPHA = 204;
+
+  function buildSimpleSymbol(color, size) {
+    const sym = state.symbolChoices || { shape: "esriSMSCircle", color: [0, 122, 194], size: 12 };
+    const base = color || sym.color;
+    const fill = [base[0], base[1], base[2], POINT_FILL_ALPHA];
+    return {
+      type: "esriSMS", style: sym.shape,
+      color: fill,
+      size: size || sym.size,
+      outline: { color: [80, 80, 80, 255], width: 1 }
+    };
+  }
+
+  function buildSizeVariable(field, features) {
+    const values = features.map(f => f.attributes[field]).filter(v => v !== null && !isNaN(v));
+    if (!values.length) return null;
+    const s = (state.symbolChoices && state.symbolChoices.size) || 12;
+    return {
+      type: "sizeInfo", field,
+      minSize: Math.max(4, Math.round(s * 0.7)),
+      maxSize: Math.round(s * 3.3),
+      minDataValue: Math.min(...values),
+      maxDataValue: Math.max(...values)
+    };
+  }
+
+  function buildPieChartRenderer(numericFields, features) {
+    const totals = features.map(f => {
+      let sum = 0;
+      for (const fld of numericFields) {
+        const v = f.attributes[fld];
+        if (typeof v === "number" && !isNaN(v)) sum += v;
+      }
+      f.attributes._pieTotal = sum;
+      return sum;
+    });
+    const minTotal = Math.min(...totals);
+    const maxTotal = Math.max(...totals);
+
+    const s = (state.symbolChoices && state.symbolChoices.size) || 12;
+    return {
+      type: "pieChart",
+      attributes: numericFields.slice(0, 8).map((fld, i) => ({
+        field: fld,
+        color: PALETTE[i % PALETTE.length],
+        label: fld.replace(/_/g, " ")
+      })),
+      size: s * 2,
+      holePercentage: 0.4,
+      outline: { color: [255, 255, 255, 255], width: 0.5, type: "esriSLS", style: "esriSLSSolid" },
+      visualVariables: [{
+        type: "sizeInfo",
+        field: "_pieTotal",
+        minSize: Math.round(14 * s / 12),
+        maxSize: Math.round(48 * s / 12),
+        minDataValue: minTotal,
+        maxDataValue: maxTotal
+      }]
+    };
+  }
+
+  const COLOR_RAMPS = [
+    { id: "blue",    name: "Blues",    colors: [[230,241,251],[199,234,255],[ 80,167,218],[  0,122,194],[  0, 97,155]] },
+    { id: "green",   name: "Greens",   colors: [[237,248,233],[186,228,179],[116,196,118],[ 49,163, 84],[  0,109, 44]] },
+    { id: "orange",  name: "Oranges",  colors: [[254,237,222],[253,190,133],[253,141, 60],[230, 85, 13],[166, 54,  3]] },
+    { id: "purple",  name: "Purples",  colors: [[242,240,247],[203,201,226],[158,154,200],[117,107,177],[ 84, 39,143]] },
+    { id: "red",     name: "Reds",     colors: [[254,229,217],[252,174,145],[251,106, 74],[222, 45, 38],[165, 15, 21]] },
+    { id: "bluered", name: "Blue–Red", colors: [[ 44,123,182],[171,217,233],[255,255,191],[253,174, 97],[215, 25, 28]] },
+  ];
+
+  function activeRampColors() {
+    const id = (state.symbolChoices && state.symbolChoices.ramp) || "blue";
+    const ramp = COLOR_RAMPS.find(r => r.id === id) || COLOR_RAMPS[0];
+    return ramp.colors;
+  }
+
+  function buildNumericColorRenderer(field, features) {
+    const values = features
+      .map(f => f.attributes[field])
+      .filter(v => v !== null && v !== undefined && v !== "" && !isNaN(v))
+      .map(Number);
+    if (values.length === 0) {
+      return { type: "simple", symbol: buildSimpleSymbol() };
+    }
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const sd = Math.sqrt(values.reduce((a, v) => a + (v - mean) * (v - mean), 0) / values.length);
+
+    let lo = Math.max(min, mean - sd);
+    let hi = Math.min(max, mean + sd);
+    if (lo >= hi) { lo = min; hi = max; }
+    if (lo >= hi) { hi = lo + 1; }
+
+    const ramp = activeRampColors();
+    const n = ramp.length;
+    const round2 = (x) => Math.round(x * 100) / 100;
+    const stops = ramp.map((c, i) => ({
+      value: round2(lo + (hi - lo) * i / (n - 1)),
+      color: [c[0], c[1], c[2], POINT_FILL_ALPHA],
+      label: i === 0 ? "< " + round2(lo) : (i === n - 1 ? "> " + round2(hi) : "")
+    }));
+
+    return {
+      type: "simple",
+      symbol: buildSimpleSymbol(),
+      visualVariables: [{
+        type: "colorInfo",
+        field: field,
+        stops: stops
+      }]
+    };
+  }
+
+  function buildUniqueRenderer(field, features) {
+    const unique = new Set();
+    for (const f of features) {
+      const v = f.attributes[field];
+      if (v !== null && v !== undefined && v !== "") unique.add(v);
+    }
+    const values = Array.from(unique).sort();
+    return {
+      type: "uniqueValue",
+      field1: field,
+      defaultSymbol: buildSimpleSymbol([179, 179, 179, 200]),
+      defaultLabel: "Other",
+      uniqueValueInfos: values.map((val, i) => ({
+        value: val,
+        label: String(val),
+        symbol: buildSimpleSymbol(PALETTE[i % PALETTE.length])
+      }))
+    };
+  }
+
+  function buildLabelingInfo(labelField) {
+    if (!labelField) return null;
+    return [{
+      labelExpression: `[${labelField}]`,
+      labelExpressionInfo: { expression: `$feature.${labelField}` },
+      labelPlacement: "esriServerPointLabelPlacementAboveCenter",
+      useCodedValues: true,
+      symbol: {
+        type: "esriTS",
+        color: [50, 50, 50, 255],
+        haloColor: [255, 255, 255, 255],
+        haloSize: 1.5,
+        font: { family: "Arial", size: 10, weight: "bold" }
+      },
+      minScale: 0, maxScale: 0
+    }];
+  }
+
+  function buildRenderer(style, choices, features, numeric) {
+    const colorIsNumeric = choices.color && numeric.includes(choices.color);
+    const buildColorRenderer = (field) =>
+      colorIsNumeric
+        ? buildNumericColorRenderer(field, features)
+        : buildUniqueRenderer(field, features);
+
+    switch (style.id) {
+      case "pie_chart":
+        return buildPieChartRenderer(numeric, features);
+      case "numeric_color_size": {
+        const r = buildNumericColorRenderer(choices.color, features);
+        const sv = buildSizeVariable(choices.size, features);
+        if (sv) r.visualVariables = (r.visualVariables || []).concat([sv]);
+        return r;
+      }
+      case "categorical_size": {
+        const r = buildColorRenderer(choices.color);
+        const sv = buildSizeVariable(choices.size, features);
+        if (sv) r.visualVariables = (r.visualVariables || []).concat([sv]);
+        return r;
+      }
+      case "categorical":
+        return buildColorRenderer(choices.color);
+      case "graduated": {
+        const r = { type: "simple", symbol: buildSimpleSymbol(), label: choices.size.replace(/_/g, " ") };
+        const sv = buildSizeVariable(choices.size, features);
+        if (sv) r.visualVariables = [sv];
+        return r;
+      }
+      case "simple":
+      default:
+        return { type: "simple", symbol: buildSimpleSymbol() };
+    }
+  }
+
+  function buildPopupTitle(style, choices) {
+    switch (style.id) {
+      case "pie_chart":         return "Composition breakdown";
+      case "numeric_color_size":
+      case "categorical_size":  return `{${choices.color}} – {${choices.size}}`;
+      case "categorical":       return `{${choices.color}}`;
+      case "graduated":         return `{${choices.size}}`;
+      case "simple":
+      default:                  return "Point";
+    }
+  }
+
+  function computeExtent(features) {
+    const xs = features.map(f => f.geometry.x);
+    const ys = features.map(f => f.geometry.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const padX = Math.max((maxX - minX) * 0.2, 100);
+    const padY = Math.max((maxY - minY) * 0.2, 100);
+    return {
+      xmin: minX - padX, ymin: minY - padY,
+      xmax: maxX + padX, ymax: maxY + padY,
+      spatialReference: { wkid: 102100, latestWkid: 3857 }
+    };
+  }
+
+  // Convert a Web Mercator extent to a WGS84 "[xmin,ymin,xmax,ymax]" array.
+  // Kept from the publish build — used here to derive the .mmap viewpoint centre.
+  function mercatorExtentToGeographic(ext) {
+    const R = 20037508.342788905;
+    const toLon = (x) => (x / R) * 180;
+    const toLat = (y) => (Math.atan(Math.exp((y / R) * Math.PI)) * 360 / Math.PI) - 90;
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    return [
+      clamp(toLon(ext.xmin), -180, 180), clamp(toLat(ext.ymin), -90, 90),
+      clamp(toLon(ext.xmax), -180, 180), clamp(toLat(ext.ymax), -90, 90)
+    ].map(v => Math.round(v * 1e5) / 1e5);
+  }
+
+  // ----------------------------------------------------------------------
+  // Live map preview — ArcGIS Maps SDK for JavaScript.
+  // ----------------------------------------------------------------------
+  let _esriMods = null;
+  function getEsri() {
+    if (_esriMods) return Promise.resolve(_esriMods);
+    return new Promise((resolve, reject) => {
+      if (!window.require) { reject(new Error("ArcGIS Maps SDK did not load")); return; }
+      window.require([
+        "esri/Map", "esri/views/MapView", "esri/Basemap",
+        "esri/layers/FeatureLayer", "esri/layers/support/Field",
+        "esri/layers/support/LabelClass",
+        "esri/renderers/support/jsonUtils",
+        "esri/geometry/Extent"
+      ], function (EsriMap, MapView, Basemap, FeatureLayer, Field, LabelClass, rendererJsonUtils, Extent) {
+        _esriMods = { EsriMap, MapView, Basemap, FeatureLayer, Field, LabelClass, rendererJsonUtils, Extent };
+        resolve(_esriMods);
+      }, reject);
+    });
+  }
+
+  let previewViewPromise = null;
+  let previewTimer = null;
+
+  function ensurePreviewView() {
+    if (!previewViewPromise) {
+      previewViewPromise = (async () => {
+        const m = await getEsri();
+        const basemap = new m.Basemap({ portalItem: { id: NATGEO_BASEMAP_ITEM_ID } });
+        const view = new m.MapView({
+          container: "mapPreview",
+          map: new m.EsriMap({ basemap }),
+          center: [-20, 30],
+          zoom: 3,
+          constraints: { snapToZoom: false }
+        });
+        log("map: MapView ready (NatGeo basemap item " + NATGEO_BASEMAP_ITEM_ID + ")", "ok");
+        return view;
+      })();
+    }
+    return previewViewPromise;
+  }
+
+  function schedulePreviewUpdate() {
+    if (previewTimer) clearTimeout(previewTimer);
+    previewTimer = setTimeout(() => { previewTimer = null; renderPreview(); }, 250);
+  }
+
+  async function renderPreview() {
+    if (!state.features.length) return;
+    const note = document.getElementById("mapPreviewNote");
+    try {
+      const m = await getEsri();
+      const view = await ensurePreviewView();
+      const extent = m.Extent.fromJSON(computeExtent(state.features));
+
+      view.map.removeAll();
+      view.map.add(buildPreviewLayer(m));
+      view.goTo(extent).catch(() => {});
+      if (note) note.textContent = "Live preview — " + state.style.name +
+        " on the National Geographic Style basemap, the same map MapMaker will show.";
+    } catch (err) {
+      log("preview failed: " + err.message, "err");
+      if (note) note.textContent = "Preview unavailable (" + err.message + ") — you can still save the map.";
+    }
+  }
+
+  function buildPreviewLayer(m) {
+    const rendererJson = buildRenderer(state.style, state.fieldChoices, state.features, state.numeric);
+    const labelJsonArr = buildLabelingInfo(state.fieldChoices.label);
+
+    const sr = (state.fcLayer.featureSet && state.fcLayer.featureSet.spatialReference) || { wkid: 102100 };
+    const source = state.features.map(f => ({
+      geometry: { type: "point", x: f.geometry.x, y: f.geometry.y, spatialReference: sr },
+      attributes: f.attributes
+    }));
+
+    let fieldJsons = (state.fields || []).slice();
+    if (state.style.id === "pie_chart" && !fieldJsons.some(f => f.name === "_pieTotal")) {
+      fieldJsons = fieldJsons.concat([{ name: "_pieTotal", type: "esriFieldTypeDouble", alias: "_pieTotal" }]);
+    }
+    const oidField = fieldJsons.find(f => f.type === "esriFieldTypeOID" || OID_NAMES.has(f.name));
+    const fields = fieldJsons.map(f => m.Field.fromJSON(f));
+
+    let renderer = null;
+    try {
+      renderer = m.rendererJsonUtils.fromJSON(rendererJson);
+    } catch (e) {
+      log("preview: renderer fromJSON failed (" + e.message + ") — using default symbol", "err");
+    }
+
+    const popupFieldInfos = state.fields
+      .filter(f => !OID_NAMES.has(f.name) && !COORD_NAMES.has(f.name.toLowerCase()) && f.name !== "_pieTotal")
+      .map(f => ({ fieldName: f.name, label: f.name.replace(/_/g, " ") }));
+
+    const layer = new m.FeatureLayer({
+      source,
+      fields,
+      objectIdField: oidField ? oidField.name : "ObjectId",
+      geometryType: "point",
+      spatialReference: sr,
+      popupTemplate: {
+        title: buildPopupTitle(state.style, state.fieldChoices),
+        content: [{ type: "fields", fieldInfos: popupFieldInfos }]
+      }
+    });
+    if (renderer) layer.renderer = renderer;
+
+    if (labelJsonArr) {
+      try {
+        layer.labelingInfo = labelJsonArr.map(l => m.LabelClass.fromJSON(l));
+        layer.labelsVisible = true;
+      } catch (e) {
+        log("preview: labels fromJSON failed — " + e.message, "err");
+      }
+    }
+    return layer;
+  }
+
+  function validateFeatures(features) {
+    if (features.length < 2) {
+      throw new Error("Your file needs at least 2 rows of data with coordinates.");
+    }
+    const withGeom = features.filter(f => f.geometry && typeof f.geometry.x === "number" && typeof f.geometry.y === "number");
+    if (withGeom.length < 2) {
+      throw new Error("Your file needs at least 2 rows with valid coordinates. Make sure your CSV has latitude/longitude columns with numeric values.");
+    }
+    if (withGeom.length < features.length * 0.5) {
+      throw new Error("Most rows don't have valid coordinates. Make sure your CSV has columns named latitude/longitude (or lat/lon) with numeric values.");
+    }
+    return withGeom;
+  }
+
+  async function countCSVRows(csvBlob) {
+    const text = await csvBlob.text();
+    const lines = text.replace(/\s+$/, "").split(/\r?\n/);
+    return Math.max(0, lines.length - 1);
+  }
+
+  async function truncateCSVBlob(csvBlob, maxRows) {
+    const text = await csvBlob.text();
+    const lines = text.replace(/\s+$/, "").split(/\r?\n/);
+    const header = lines[0];
+    const dataRows = lines.slice(1, 1 + maxRows);
+    const truncated = [header, ...dataRows].join("\n");
+    return new Blob([truncated], { type: "text/csv" });
+  }
+
+  function showTooLargePanel(rowCount) {
+    showStage("toolarge");
+    document.getElementById("toolargeSubtitle").textContent =
+      `Your file has ${rowCount} rows. The MapMaker fieldwork upload supports up to ${MAX_ROWS} rows per map.`;
+  }
+
+  let pendingOversizedBlob = null;
+  let pendingDisplayName = null;
+
+  async function continueAfterTruncate() {
+    if (!pendingOversizedBlob) return;
+    const trimmedBlob = await truncateCSVBlob(pendingOversizedBlob, MAX_ROWS);
+    const name = pendingDisplayName;
+    pendingOversizedBlob = null;
+    pendingDisplayName = null;
+    loadAndAnalyze(trimmedBlob, name);
+  }
+
+  async function loadAndAnalyze(csvBlob, displayName) {
+    state.csvBlob = csvBlob;
+    state.displayName = displayName;
+
+    try {
+      const rowCount = await countCSVRows(csvBlob);
+      if (rowCount > MAX_ROWS) {
+        pendingOversizedBlob = csvBlob;
+        pendingDisplayName = displayName;
+        showTooLargePanel(rowCount);
+        return;
+      }
+    } catch (err) {
+      console.warn("Pre-flight row count failed:", err);
+    }
+
+    showStage("publishing");
+    const progressList = document.getElementById("progressList");
+    progressList.innerHTML = `<div class="progress"><div class="spinner"></div><div class="progress-text">Reading your file…</div></div>`;
+
+    try {
+      const publishParams = await analyzeCSV(csvBlob);
+      progressList.innerHTML += `<div class="progress-step-done">Your file was read</div>`;
+      progressList.innerHTML += `<div class="progress"><div class="spinner"></div><div class="progress-text">Detecting columns and coordinates…</div></div>`;
+
+      const fcLayer = await generateFeatures(csvBlob, publishParams);
+      state.fcLayer = fcLayer;
+      const allFeatures = fcLayer.featureSet.features;
+      state.fields = fcLayer.layerDefinition.fields;
+      state.features = validateFeatures(allFeatures);
+      const droppedNoGeom = allFeatures.length - state.features.length;
+      if (droppedNoGeom > 0) {
+        log(`generate: ${droppedNoGeom} feature(s) had no geometry and were dropped`, "err");
+      }
+
+      const { numeric, categorical } = classifyColumns(state.fields, state.features);
+      state.numeric = numeric;
+      state.categorical = categorical;
+      state.style = pickAutoStyle(numeric, categorical);
+      state.fieldChoices = pickAutoFields(state.style, numeric, categorical);
+
+      await new Promise(r => setTimeout(r, 400));
+      renderConfigurePanel();
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  function renderConfigurePanel() {
+    showStage("configure");
+    document.getElementById("configureSubtitle").textContent =
+      `Found ${state.features.length} points · ${state.numeric.length} numeric, ${state.categorical.length} categorical columns.`;
+    renderStyleOptions();
+    renderFieldsPanel();
+    renderSymbolPanel();
+    updateConfigSummary();
+  }
+
+  const SHAPES = [
+    { id: "esriSMSCircle",   glyph: "●", name: "Circle" },
+    { id: "esriSMSSquare",   glyph: "■", name: "Square" },
+    { id: "esriSMSDiamond",  glyph: "◆", name: "Diamond" },
+    { id: "esriSMSTriangle", glyph: "▲", name: "Triangle" },
+  ];
+
+  function renderSymbolPanel() {
+    const c = state.symbolChoices;
+    const isPie = state.style.id === "pie_chart";
+    const singleColor = state.style.id === "simple" || state.style.id === "graduated";
+    const rampActive = !isPie && state.style.fields.includes("color") &&
+      !!state.fieldChoices.color && state.numeric.includes(state.fieldChoices.color);
+
+    document.getElementById("shapeRow").classList.toggle("hidden", isPie);
+    document.getElementById("colorRow").classList.toggle("hidden", isPie || !singleColor);
+    document.getElementById("rampRow").classList.toggle("hidden", !rampActive);
+
+    const rampWrap = document.getElementById("rampOptions");
+    rampWrap.innerHTML = "";
+    if (rampActive) {
+      for (const ramp of COLOR_RAMPS) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "ramp-btn" + (c.ramp === ramp.id ? " selected" : "");
+        b.title = ramp.name;
+        b.style.background = "linear-gradient(90deg, " +
+          ramp.colors.map(col => "rgb(" + col[0] + "," + col[1] + "," + col[2] + ")").join(", ") + ")";
+        b.addEventListener("click", () => {
+          c.ramp = ramp.id;
+          renderSymbolPanel();
+          updateConfigSummary();
+        });
+        rampWrap.appendChild(b);
+      }
+    }
+
+    const shapeWrap = document.getElementById("shapeOptions");
+    shapeWrap.innerHTML = "";
+    for (const s of SHAPES) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "shape-btn" + (c.shape === s.id ? " selected" : "");
+      b.title = s.name;
+      b.textContent = s.glyph;
+      b.addEventListener("click", () => {
+        c.shape = s.id;
+        renderSymbolPanel();
+        updateConfigSummary();
+      });
+      shapeWrap.appendChild(b);
+    }
+
+    const swWrap = document.getElementById("colorSwatches");
+    swWrap.innerHTML = "";
+    for (const col of PALETTE) {
+      const b = document.createElement("button");
+      b.type = "button";
+      const sel = col[0] === c.color[0] && col[1] === c.color[1] && col[2] === c.color[2];
+      b.className = "swatch-btn" + (sel ? " selected" : "");
+      b.title = "rgb(" + col.slice(0, 3).join(", ") + ")";
+      b.style.background = "rgb(" + col[0] + "," + col[1] + "," + col[2] + ")";
+      b.addEventListener("click", () => {
+        c.color = col.slice(0, 3);
+        renderSymbolPanel();
+        updateConfigSummary();
+      });
+      swWrap.appendChild(b);
+    }
+
+    document.getElementById("sizeSlider").value = c.size;
+    document.getElementById("sizeValue").textContent = c.size + " px";
+  }
+
+  function shortStyleLabel(name) {
+    return name.replace(/^Map\s+/i, (m) => "").replace(/^./, c => c.toUpperCase());
+  }
+
+  function renderStyleOptions() {
+    const container = document.getElementById("styleOptions");
+    container.innerHTML = "";
+    for (const style of STYLES) {
+      const available = isStyleAvailable(style, state.numeric, state.categorical);
+      const div = document.createElement("div");
+      div.className = "style-option" + (style.id === state.style.id ? " selected" : "") + (available ? "" : " disabled");
+      div.innerHTML = `
+        <span class="style-option-icon">${style.icon}</span>
+        <span class="style-option-name">${shortStyleLabel(style.name)}</span>
+      `;
+      if (available) {
+        div.addEventListener("click", () => {
+          state.style = style;
+          state.fieldChoices = pickAutoFields(style, state.numeric, state.categorical);
+          renderStyleOptions();
+          renderFieldsPanel();
+          renderSymbolPanel();
+          updateConfigSummary();
+        });
+      }
+      container.appendChild(div);
+    }
+    const desc = document.getElementById("styleDescription");
+    if (desc && state.style) {
+      desc.textContent = `${state.style.name} — ${state.style.hint}`;
+    }
+  }
+
+  function renderFieldsPanel() {
+    const container = document.getElementById("fieldsContainer");
+    container.innerHTML = "";
+
+    if (!state.style.fields.length) {
+      document.getElementById("fieldsSection").classList.add("hidden");
+      return;
+    }
+    document.getElementById("fieldsSection").classList.remove("hidden");
+
+    for (const fieldKey of state.style.fields) {
+      const fieldDef = FIELD_DEFS[fieldKey];
+      if (!fieldDef) continue;
+
+      let effectiveSource = fieldDef.source;
+      if (state.style.id === "numeric_color_size" && fieldKey === "color") effectiveSource = "numeric";
+
+      let sourceList, optionsHtml, emptyHint;
+      if (effectiveSource === "numeric") {
+        sourceList = state.numeric;
+        emptyHint = "no numeric columns in your data";
+        optionsHtml = sourceList.map(o => `<option value="${o}">${o.replace(/_/g, " ")}</option>`).join("");
+      } else if (effectiveSource === "categorical") {
+        sourceList = state.categorical;
+        emptyHint = "no text columns in your data";
+        optionsHtml = sourceList.map(o => `<option value="${o}">${o.replace(/_/g, " ")}</option>`).join("");
+      } else if (effectiveSource === "label") {
+        sourceList = state.categorical.concat(state.numeric);
+        emptyHint = "no columns available to label by";
+        const catOpts = state.categorical.map(o => `<option value="${o}">${o.replace(/_/g, " ")}</option>`).join("");
+        const numOpts = state.numeric.map(o => `<option value="${o}">${o.replace(/_/g, " ")} (number)</option>`).join("");
+        optionsHtml =
+          (state.categorical.length ? `<optgroup label="Text columns">${catOpts}</optgroup>` : "") +
+          (state.numeric.length ? `<optgroup label="Number columns">${numOpts}</optgroup>` : "");
+      } else {
+        sourceList = state.categorical.concat(state.numeric);
+        emptyHint = "no columns available to colour by";
+        const catOpts = state.categorical.map(o => `<option value="${o}">${o.replace(/_/g, " ")}</option>`).join("");
+        const numOpts = state.numeric.map(o => `<option value="${o}">${o.replace(/_/g, " ")} (number)</option>`).join("");
+        optionsHtml =
+          (state.categorical.length ? `<optgroup label="By category">${catOpts}</optgroup>` : "") +
+          (state.numeric.length ? `<optgroup label="By number (colour scale)">${numOpts}</optgroup>` : "");
+      }
+
+      const row = document.createElement("div");
+      row.className = "config-row";
+
+      if (sourceList.length === 0) {
+        row.innerHTML = `
+          <div class="config-label"><span class="config-icon">${fieldDef.icon}</span>${fieldDef.label}</div>
+          <div style="flex: 1; color: #888; font-size: 13px; font-style: italic; padding: 8px 0;">${emptyHint}</div>
+        `;
+        container.appendChild(row);
+        state.fieldChoices[fieldKey] = null;
+        continue;
+      }
+
+      row.innerHTML = `
+        <div class="config-label"><span class="config-icon">${fieldDef.icon}</span>${fieldDef.label}</div>
+        <select class="config-select" data-field="${fieldKey}">
+          <option value="${NONE_VALUE}">— none —</option>
+          ${optionsHtml}
+        </select>
+      `;
+      const select = row.querySelector("select");
+      select.value = state.fieldChoices[fieldKey] || NONE_VALUE;
+      select.addEventListener("change", () => {
+        state.fieldChoices[fieldKey] = select.value === NONE_VALUE ? null : select.value;
+        renderSymbolPanel();
+        updateConfigSummary();
+      });
+      container.appendChild(row);
+    }
+  }
+
+  function updateConfigSummary() {
+    const c = state.fieldChoices;
+    const colorIsNumeric = c.color && state.numeric.includes(c.color);
+    const colorPhrase = c.color
+      ? (colorIsNumeric ? `shaded by ${c.color}` : `colored by ${c.color}`)
+      : null;
+
+    let summary = "";
+    switch (state.style.id) {
+      case "pie_chart":
+        summary = `Each point will show a pie chart of ${state.numeric.length} numeric columns, sized by total.`;
+        break;
+      case "numeric_color_size":
+        summary = `Each point shaded by ${c.color || "—"}, sized by ${c.size || "—"}.`;
+        break;
+      case "categorical_size":
+        summary = `Each point ${colorPhrase || "colored by —"}, sized by ${c.size || "—"}.`;
+        break;
+      case "categorical":
+        summary = `Each point ${colorPhrase || "colored by —"}.`;
+        break;
+      case "graduated":
+        summary = `Each point sized by ${c.size || "—"}.`;
+        break;
+      case "simple":
+        summary = `Each point shown as a simple marker.`;
+        break;
+    }
+    if (c.label) summary += ` Labels show ${c.label}.`;
+    document.getElementById("configSummary").textContent = summary;
+
+    schedulePreviewUpdate();
+  }
+
+  // ======================================================================
+  // Save locally as a .mmap — the format the local MapMaker / Atlas POC opens.
+  //
+  // The local POC stores ONE colour + size per feature (it has no data-driven
+  // renderers), so we BAKE the chosen style into each point: compute its
+  // colour and size from the current renderer/field choices and write them as
+  // per-feature attributes. The POC then reproduces the look point-by-point.
+  //
+  // .mmap schema (must match the POC exactly):
+  //   { type:"MapMakerLocalDocument", version:2, title, savedAt, basemap,
+  //     viewpoint:{center:[lon,lat], zoom},
+  //     graphics:[ { attributes:{uid,kind,title,description,imageUrl,color,size,rotation},
+  //                  geometry:{x,y,spatialReference} } ] }
+  //   colour is a HEX string; kind is "point".
+  //
+  // Limitations of the simple local format (disclosed in the UI / README):
+  //   - pie charts can't be represented -> those points degrade to a base colour
+  //   - the label field is stored as the popup title; the local POC shows no
+  //     on-map point labels.
+  // ======================================================================
+  const LOCAL_DOC_TYPE = "MapMakerLocalDocument";
+  const LOCAL_DOC_VERSION = 2;
+  const LOCAL_DEFAULT_COLOR = "#0079c1";
+
+  function rgbToHex(rgb) {
+    if (!rgb || rgb.length < 3) return LOCAL_DEFAULT_COLOR;
+    const h = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+    return "#" + h(rgb[0]) + h(rgb[1]) + h(rgb[2]);
+  }
+  function newLocalUid() { return "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  // Build a per-feature colour+size baker for the current style/field choices.
+  function makeStyleBaker() {
+    const style = state.style.id;
+    const cf = state.fieldChoices.color, sf = state.fieldChoices.size;
+    const colorIsNumeric = cf && state.numeric.includes(cf);
+    const baseColorHex = rgbToHex(state.symbolChoices.color);
+    const baseSize = state.symbolChoices.size || 12;
+
+    // categorical colour map (sorted unique -> palette), mirrors buildUniqueRenderer
+    let catColor = null;
+    if (cf && !colorIsNumeric) {
+      const uniq = new Set();
+      for (const f of state.features) {
+        const v = f.attributes[cf];
+        if (v !== null && v !== undefined && v !== "") uniq.add(v);
+      }
+      const values = Array.from(uniq).sort();
+      catColor = new Map();
+      values.forEach((val, i) => catColor.set(val, rgbToHex(PALETTE[i % PALETTE.length])));
+    }
+
+    // numeric colour ramp (continuous), mirrors buildNumericColorRenderer stops
+    let numColor = null;
+    const numericColorField = (style === "numeric_color_size") ? cf : (colorIsNumeric ? cf : null);
+    if (numericColorField) {
+      const vals = state.features.map(f => f.attributes[numericColorField])
+        .filter(v => v !== null && v !== undefined && v !== "" && !isNaN(v)).map(Number);
+      if (vals.length) {
+        const min = Math.min(...vals), max = Math.max(...vals);
+        const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+        const sd = Math.sqrt(vals.reduce((a, v) => a + (v - mean) * (v - mean), 0) / vals.length);
+        let lo = Math.max(min, mean - sd), hi = Math.min(max, mean + sd);
+        if (lo >= hi) { lo = min; hi = max; }
+        if (lo >= hi) { hi = lo + 1; }
+        const ramp = activeRampColors();
+        numColor = (v) => {
+          const n = ramp.length;
+          let t = (Number(v) - lo) / (hi - lo);
+          if (!isFinite(t)) t = 0;
+          t = Math.max(0, Math.min(1, t));
+          const pos = t * (n - 1), i = Math.floor(pos), frac = pos - i;
+          const a = ramp[i], b = ramp[Math.min(n - 1, i + 1)];
+          return rgbToHex([a[0] + (b[0] - a[0]) * frac, a[1] + (b[1] - a[1]) * frac, a[2] + (b[2] - a[2]) * frac]);
+        };
+      }
+    }
+
+    // size ramp, mirrors buildSizeVariable
+    let sizeFn = null;
+    const usesSize = sf && (style === "graduated" || style === "numeric_color_size" || style === "categorical_size");
+    if (usesSize) {
+      const sv = buildSizeVariable(sf, state.features);
+      if (sv) {
+        sizeFn = (v) => {
+          let t = (Number(v) - sv.minDataValue) / (sv.maxDataValue - sv.minDataValue);
+          if (!isFinite(t)) t = 0;
+          t = Math.max(0, Math.min(1, t));
+          return Math.round(sv.minSize + t * (sv.maxSize - sv.minSize));
+        };
+      }
+    }
+
+    return function bake(feature) {
+      let colorHex = baseColorHex;
+      if (cf) {
+        if (colorIsNumeric || style === "numeric_color_size") {
+          if (numColor) colorHex = numColor(feature.attributes[cf]);
+        } else if (catColor) {
+          colorHex = catColor.has(feature.attributes[cf]) ? catColor.get(feature.attributes[cf]) : "#b3b3b3";
+        }
+      }
+      let size = baseSize;
+      if (sizeFn) size = sizeFn(feature.attributes[sf]);
+      return { colorHex, size };
+    };
+  }
+
+  // Human-readable popup body from a feature's attributes (skip system/coord fields).
+  function localDescription(feature) {
+    const skip = (name) => OID_NAMES.has(name) || COORD_NAMES.has(name.toLowerCase()) || name === "_pieTotal";
+    const parts = [];
+    for (const f of state.fields) {
+      if (skip(f.name)) continue;
+      const v = feature.attributes[f.name];
+      if (v === null || v === undefined || v === "") continue;
+      parts.push(f.name.replace(/_/g, " ") + ": " + v);
+    }
+    return parts.join("\n");
+  }
+
+  function estimateZoom(west, south, east, north) {
+    const span = Math.max(Math.abs(east - west), Math.abs(north - south)) || 0.01;
+    let z = Math.floor(Math.log2(360 / span));
+    return Math.max(2, Math.min(16, z - 1));
+  }
+
+  function buildLocalMmap(docTitle) {
+    const bake = makeStyleBaker();
+    const labelField = state.fieldChoices.label;
+    const sr = (state.fcLayer && state.fcLayer.featureSet && state.fcLayer.featureSet.spatialReference)
+      || { wkid: 102100, latestWkid: 3857 };
+
+    const graphics = state.features.map((f) => {
+      const baked = bake(f);
+      const ptitle = labelField ? String(f.attributes[labelField]) : "";
+      return {
+        attributes: {
+          uid: newLocalUid(), kind: "point",
+          title: ptitle, description: localDescription(f), imageUrl: "",
+          color: baked.colorHex, size: baked.size, rotation: 0
+        },
+        geometry: { x: f.geometry.x, y: f.geometry.y, spatialReference: sr }
+      };
+    });
+
+    const extent = computeExtent(state.features);            // Web Mercator
+    const geo = mercatorExtentToGeographic(extent);          // [w, s, e, n]
+    const center = [(geo[0] + geo[2]) / 2, (geo[1] + geo[3]) / 2];
+
+    return {
+      type: LOCAL_DOC_TYPE, version: LOCAL_DOC_VERSION,
+      title: docTitle, savedAt: new Date().toISOString(),
+      basemap: "topo-vector",
+      viewpoint: { center: center, zoom: estimateZoom(geo[0], geo[1], geo[2], geo[3]) },
+      graphics: graphics
+    };
+  }
+
+  async function saveLocalMmap() {
+    if (!state.features.length) { showError("Load some data first."); return; }
+    const base = (state.displayName ? state.displayName.replace(/\.csv$/i, "") : "fieldwork-map") || "fieldwork-map";
+    const suggested = base.replace(/[^\w\-]+/g, "_") + ".mmap";
+    const title = base.replace(/_/g, " ");
+
+    let text;
+    try {
+      text = JSON.stringify(buildLocalMmap(title), null, 2);
+    } catch (e) {
+      showError("Couldn't build the map file: " + e.message);
+      return;
+    }
+
+    // File System Access where available (choose name + folder, like the POC);
+    // otherwise fall back to a normal download.
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: suggested,
+          types: [{ description: "MapMaker local map", accept: { "application/json": [".mmap"] } }]
+        });
+        const w = await handle.createWritable();
+        await w.write(text);
+        await w.close();
+        showResult(title, state.features.length, handle.name || suggested);
+        return;
+      } catch (err) {
+        if (err && err.name === "AbortError") return;   // user cancelled the picker
+        // any other error: fall through to a download
+        log("showSaveFilePicker failed (" + err.message + ") — falling back to download", "err");
+      }
+    }
+    downloadText(suggested, text, "application/json");
+    showResult(title, state.features.length, suggested);
+  }
+
+  function showResult(title, pointCount, filename) {
+    showStage("result");
+    document.getElementById("resultDetail").textContent =
+      `“${title}” — ${pointCount} points, saved as a .mmap file on this device`;
+    document.getElementById("resultMeta").textContent = filename ? ("File: " + filename) : "";
+    log("saved local .mmap: " + filename + " (" + pointCount + " points)", "ok");
+  }
+
+  function showError(message) {
+    showStage("error");
+    document.getElementById("errorText").textContent = message;
+  }
+
+  function reset() {
+    // Clear the data layer and glide back to the world view behind the upload card
+    if (previewViewPromise) {
+      previewViewPromise.then(v => {
+        v.map.removeAll();
+        v.goTo({ center: [-20, 30], zoom: 3 }).catch(() => {});
+      }).catch(() => {});
+    }
+    pendingOversizedBlob = null;
+    pendingDisplayName = null;
+    Object.assign(state, {
+      csvBlob: null, displayName: null, fcLayer: null,
+      features: [], fields: [], numeric: [], categorical: [],
+      style: null, fieldChoices: { color: null, size: null, label: null },
+      symbolChoices: { shape: "esriSMSCircle", color: [0, 122, 194], size: 12, ramp: "blue" },
+      isSample: false,
+    });
+    showStage("upload");
+  }
+
+  // ----------------------------------------------------------------------
+  // Wire up
+  // ----------------------------------------------------------------------
+  const dropZone = document.getElementById("dropZone");
+  const fileInput = document.getElementById("fileInput");
+
+  dropZone.addEventListener("click", () => fileInput.click());
+
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files[0];
+    if (file) handleIncomingFile(file, file.name);
+    fileInput.value = "";
+  });
+
+  dropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropZone.classList.add("dragover");
+  });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("dragover");
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      showError("This tool only accepts CSV files. Please save your spreadsheet as CSV first.");
+      return;
+    }
+    handleIncomingFile(file, file.name);
+  });
+
+  document.getElementById("sampleBtn").addEventListener("click", () => {
+    state.isSample = true;
+    const blob = new Blob([SAMPLE_CSV], { type: "text/csv" });
+    handleIncomingFile(blob, "Sample Tree Survey.csv");
+  });
+
+  // The header "Save map file" button now writes a local .mmap — no sign-in.
+  document.getElementById("publishBtn").addEventListener("click", saveLocalMmap);
+
+  document.getElementById("sizeSlider").addEventListener("input", () => {
+    state.symbolChoices.size = parseInt(document.getElementById("sizeSlider").value, 10);
+    document.getElementById("sizeValue").textContent = state.symbolChoices.size + " px";
+    schedulePreviewUpdate();
+  });
+
+  document.getElementById("restartBtn").addEventListener("click", reset);
+  document.getElementById("anotherBtn").addEventListener("click", reset);
+  document.getElementById("errorRestartBtn").addEventListener("click", reset);
+  document.getElementById("truncateBtn").addEventListener("click", continueAfterTruncate);
+  document.getElementById("toolargeRestartBtn").addEventListener("click", reset);
+  document.getElementById("agentStartOverBtn").addEventListener("click", reset);
+
+  // Start the full-screen map immediately — the upload card floats over it,
+  // so the first thing anyone sees is a map waiting for their data.
+  ensurePreviewView().catch(err => log("map init failed: " + err.message, "err"));
+  log("ready. local-save build — maps are saved as .mmap files for the local MapMaker/Atlas POC (Open map -> My Maps).");
+</script>
+
+</body>
+</html>
