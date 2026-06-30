@@ -359,7 +359,7 @@
           <summary>Known limits of this concept build</summary>
           <ul>
             <li><strong>Pie charts</strong> can't be represented in the local format, so that style saves as plain base-colour points. Every other style &mdash; locations, by type, by size, by colour &amp; size, by type &amp; size &mdash; carries over faithfully.</li>
-            <li><strong>Labels</strong> are written as separate text just north of each point. The offset is baked in at save time, so it looks right at the opening (fit-to-extent) view but the gap shifts a little if you zoom a long way in or out.</li>
+            <li><strong>Labels</strong> are written as separate on-map text at each point; the local POC lifts them just off the marker with a fixed offset, so the gap stays constant at every zoom.</li>
             <li>The CSV is still parsed by ArcGIS Online's anonymous analyze/generate, and the preview basemap loads online &mdash; so this build is <strong>&ldquo;no account&rdquo;, not yet fully offline</strong>. Replacing that parse step with a client-side parser is what would make it work disconnected.</li>
           </ul>
         </details>
@@ -2053,13 +2053,12 @@ Eucalyptus,85,-117.1610,32.7114`;
       };
     });
 
-    // On-map labels: the local POC renders kind:"text" graphics as TextSymbols,
-    // so when a label field is chosen we add one text graphic per point. It sits
-    // a little NORTH of the point (offset ~4% of the data's N–S extent, so the
-    // gap stays proportionate at the fit-to-extent opening view) instead of on
-    // top of the marker. Dark text + the POC's white halo keeps it legible.
+    // On-map labels: the local POC renders kind:"text" graphics as TextSymbols
+    // and lifts them off the marker with a fixed screen-space yoffset, so we place
+    // the text AT the point's exact coordinate. The POC supplies the visual gap,
+    // which keeps it constant at every zoom (no baked-in geographic offset here).
+    // Dark text + the POC's white halo keeps it legible.
     if (labelField) {
-      const labelOffset = Math.max((extent.ymax - extent.ymin) * 0.04, 1);   // Web Mercator metres
       state.features.forEach((f) => {
         const v = f.attributes[labelField];
         if (v === null || v === undefined || v === "") return;
@@ -2069,7 +2068,7 @@ Eucalyptus,85,-117.1610,32.7114`;
             title: String(v), description: "", imageUrl: "",
             color: "#333333", size: 12, rotation: 0
           },
-          geometry: { x: f.geometry.x, y: f.geometry.y + labelOffset, spatialReference: sr }
+          geometry: { x: f.geometry.x, y: f.geometry.y, spatialReference: sr }
         });
       });
     }
