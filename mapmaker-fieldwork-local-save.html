@@ -299,6 +299,17 @@
     .agent-progress { display: flex; align-items: center; gap: 12px; }
     .agent-progress .progress-text { color: var(--brand-primary-dark); }
 
+    details.limits { margin-top: 14px; font-size: 12px; color: #777; }
+    details.limits > summary {
+      cursor: pointer; font-weight: 600; color: #555;
+      list-style: none; padding: 8px 0; user-select: none;
+    }
+    details.limits > summary::-webkit-details-marker { display: none; }
+    details.limits > summary::before { content: "\25B8  "; color: #999; }
+    details.limits[open] > summary::before { content: "\25BE  "; }
+    details.limits ul { margin: 4px 0 0 0; padding-left: 18px; line-height: 1.6; }
+    details.limits li { margin-bottom: 6px; }
+
     .hidden { display: none !important; }
   </style>
 </head>
@@ -343,6 +354,15 @@
         <p style="color: #888; font-size: 12px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #eee;">
           Up to 1000 rows per map. Your map is saved as a <code>.mmap</code> file on this device &mdash; no account or sign-in. Open it in the MapMaker / Atlas POC under <strong>Open map &rarr; My Maps</strong>.
         </p>
+
+        <details class="limits">
+          <summary>Known limits of this concept build</summary>
+          <ul>
+            <li><strong>Pie charts</strong> can't be represented in the local format, so that style saves as plain base-colour points. Every other style &mdash; locations, by type, by size, by colour &amp; size, by type &amp; size &mdash; carries over faithfully.</li>
+            <li><strong>Labels</strong> are written as separate text just north of each point. The offset is baked in at save time, so it looks right at the opening (fit-to-extent) view but the gap shifts a little if you zoom a long way in or out.</li>
+            <li>The CSV is still parsed by ArcGIS Online's anonymous analyze/generate, and the preview basemap loads online &mdash; so this build is <strong>&ldquo;no account&rdquo;, not yet fully offline</strong>. Replacing that parse step with a client-side parser is what would make it work disconnected.</li>
+          </ul>
+        </details>
       </div>
     </div>
 
@@ -2015,6 +2035,11 @@ Eucalyptus,85,-117.1610,32.7114`;
     const sr = (state.fcLayer && state.fcLayer.featureSet && state.fcLayer.featureSet.spatialReference)
       || { wkid: 102100, latestWkid: 3857 };
 
+    const extent = computeExtent(state.features);            // Web Mercator
+    const geo = mercatorExtentToGeographic(extent);          // [w, s, e, n]
+    const center = [(geo[0] + geo[2]) / 2, (geo[1] + geo[3]) / 2];
+
+    // The point graphics, each carrying its baked colour + size.
     const graphics = state.features.map((f) => {
       const baked = bake(f);
       const ptitle = labelField ? String(f.attributes[labelField]) : "";
@@ -2028,9 +2053,26 @@ Eucalyptus,85,-117.1610,32.7114`;
       };
     });
 
-    const extent = computeExtent(state.features);            // Web Mercator
-    const geo = mercatorExtentToGeographic(extent);          // [w, s, e, n]
-    const center = [(geo[0] + geo[2]) / 2, (geo[1] + geo[3]) / 2];
+    // On-map labels: the local POC renders kind:"text" graphics as TextSymbols,
+    // so when a label field is chosen we add one text graphic per point. It sits
+    // a little NORTH of the point (offset ~4% of the data's N–S extent, so the
+    // gap stays proportionate at the fit-to-extent opening view) instead of on
+    // top of the marker. Dark text + the POC's white halo keeps it legible.
+    if (labelField) {
+      const labelOffset = Math.max((extent.ymax - extent.ymin) * 0.04, 1);   // Web Mercator metres
+      state.features.forEach((f) => {
+        const v = f.attributes[labelField];
+        if (v === null || v === undefined || v === "") return;
+        graphics.push({
+          attributes: {
+            uid: newLocalUid(), kind: "text",
+            title: String(v), description: "", imageUrl: "",
+            color: "#333333", size: 12, rotation: 0
+          },
+          geometry: { x: f.geometry.x, y: f.geometry.y + labelOffset, spatialReference: sr }
+        });
+      });
+    }
 
     return {
       type: LOCAL_DOC_TYPE, version: LOCAL_DOC_VERSION,
