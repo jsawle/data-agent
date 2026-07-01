@@ -1923,7 +1923,7 @@ Eucalyptus,85,-117.1610,32.7114`;
   //     on-map point labels.
   // ======================================================================
   const LOCAL_DOC_TYPE = "MapMakerLocalDocument";
-  const LOCAL_DOC_VERSION = 2;
+  const LOCAL_DOC_VERSION = 3;
   const LOCAL_DEFAULT_COLOR = "#0079c1";
 
   function rgbToHex(rgb) {
@@ -2030,8 +2030,9 @@ Eucalyptus,85,-117.1610,32.7114`;
   }
 
   function buildLocalMmap(docTitle) {
-    const bake = makeStyleBaker();
-    const labelField = state.fieldChoices.label;
+    const style = state.style;
+    const choices = state.fieldChoices;
+    const labelField = choices.label;
     const sr = (state.fcLayer && state.fcLayer.featureSet && state.fcLayer.featureSet.spatialReference)
       || { wkid: 102100, latestWkid: 3857 };
 
@@ -2039,46 +2040,48 @@ Eucalyptus,85,-117.1610,32.7114`;
     const geo = mercatorExtentToGeographic(extent);          // [w, s, e, n]
     const center = [(geo[0] + geo[2]) / 2, (geo[1] + geo[3]) / 2];
 
-    // The point graphics, each carrying its baked colour + size.
-    const graphics = state.features.map((f) => {
-      const baked = bake(f);
-      const ptitle = labelField ? String(f.attributes[labelField]) : "";
-      return {
-        attributes: {
-          uid: newLocalUid(), kind: "point",
-          title: ptitle, description: localDescription(f), imageUrl: "",
-          color: baked.colorHex, size: baked.size, rotation: 0
-        },
-        geometry: { x: f.geometry.x, y: f.geometry.y, spatialReference: sr }
-      };
-    });
+    // v3 schema: a feature collection carrying a REAL renderer + labelingInfo, built by
+    // the SAME functions that drive the live preview — so pie charts and labels come
+    // across intact (as FeatureLayer constructs, not baked graphics). buildRenderer may
+    // add a _pieTotal attribute to the features (pie charts), so call it before mapping.
+    const renderer = buildRenderer(style, choices, state.features, state.numeric);
+    const labelingInfo = buildLabelingInfo(labelField);      // null when no label field
 
-    // On-map labels: the local POC renders kind:"text" graphics as TextSymbols
-    // and lifts them off the marker with a fixed screen-space yoffset, so we place
-    // the text AT the point's exact coordinate. The POC supplies the visual gap,
-    // which keeps it constant at every zoom (no baked-in geographic offset here).
-    // Dark text + the POC's white halo keeps it legible.
-    if (labelField) {
-      state.features.forEach((f) => {
-        const v = f.attributes[labelField];
-        if (v === null || v === undefined || v === "") return;
-        graphics.push({
-          attributes: {
-            uid: newLocalUid(), kind: "text",
-            title: String(v), description: "", imageUrl: "",
-            color: "#333333", size: 12, rotation: 0
-          },
-          geometry: { x: f.geometry.x, y: f.geometry.y, spatialReference: sr }
-        });
-      });
+    let fields = (state.fields || []).slice();
+    if (style.id === "pie_chart" && !fields.some((f) => f.name === "_pieTotal")) {
+      fields = fields.concat([{ name: "_pieTotal", type: "esriFieldTypeDouble", alias: "_pieTotal" }]);
     }
+    const oidF = fields.find((f) => f.type === "esriFieldTypeOID" || OID_NAMES.has(f.name));
+
+    const popupFieldInfos = state.fields
+      .filter((f) => !OID_NAMES.has(f.name) && !COORD_NAMES.has(f.name.toLowerCase()) && f.name !== "_pieTotal")
+      .map((f) => ({ fieldName: f.name, label: f.name.replace(/_/g, " ") }));
+
+    const features = state.features.map((f) => ({
+      geometry: { x: f.geometry.x, y: f.geometry.y, spatialReference: sr },
+      attributes: f.attributes
+    }));
+
+    const layer = {
+      id: "fieldwork",
+      title: docTitle || "Fieldwork data",
+      geometryType: "point",
+      objectIdField: oidF ? oidF.name : "ObjectId",
+      spatialReference: sr,
+      fields: fields,
+      renderer: renderer,
+      labelingInfo: labelingInfo,
+      popupInfo: { title: buildPopupTitle(style, choices), content: [{ type: "fields", fieldInfos: popupFieldInfos }] },
+      features: features
+    };
 
     return {
       type: LOCAL_DOC_TYPE, version: LOCAL_DOC_VERSION,
       title: docTitle, savedAt: new Date().toISOString(),
       basemap: "topo-vector",
       viewpoint: { center: center, zoom: estimateZoom(geo[0], geo[1], geo[2], geo[3]) },
-      graphics: graphics
+      sketch: [],
+      layers: [layer]
     };
   }
 
